@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+# glanimd - custom GIF / still frame player for GL-BE3600 ST7789 panel (/dev/fb0)
+# Frame packs are converted on a PC by glanim-convert.py and uploaded through LuCI.
+# Compatibility: Python 3.11 (busybox OpenWrt), stdlib only.
+
+import os
+import sys
+import json
+import time
+import signal
+import subprocess
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import glanimdash as dash
+except Exception:
+    dash = None
+
+FB = "/dev/fb0"
+BL = "/sys/class/backlight/soc:backlight/brightness"
+STATUS = "/tmp/glanim.status"
+SCREEN_INIT = "/etc/init.d/gl_screen"
+FRAMES_DEFAULT = "/usr/share/glanim/frames"
+
+FB_W, FB_H = 76, 284
+FB_BYTES = FB_W * FB_H * 2
+
+
+def uci_get(key, default=""):
+    try:
+        out = subprocess.check_output(
+            ["uci", "get", "glanim.globals." + key],
+            stderr=subprocess.DEVNULL).decode().strip()
+        return out if out else default
+    except Exception:
+        return default
+
+
+def sh(cmd):
+    try:
+        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def _uci_bool(key, default="1"):
+    return uci_get(key, default) == "1"
+
+
+def _custom_layout():
+    raw = uci_get("custom_layout", "")
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
+def load_config():
+    return {
+        "mode": uci_get("mode", "gif"),
+        "frames_dir": uci_get("frames_dir", FRAMES_DEFAULT),
+        "fps": int(uci_get("fps", "0") or 0),
+        "loop": uci_get("loop", "1") == "1",
+        "rotate": int(uci_get("rotate", "0") or 0),
+        "flip": uci_get("flip", "0") == "1",
+        "brightness": uci_get("brightness", "4"),
+        "keep_original": uci_get("keep_original", "1") == "1",
+        # dashboard panel items
+        "show_time": _uci_bool("show_time", "1"),
+        "show_cpu": _uci_bool("show_cpu", "1"),
+        "show_mem": _uci_bool("show_mem", "1"),
+        "show_temp": _uci_bool("show_temp", "1"),
+        "show_net": _uci_bool("show_net", "1"),
+        "show_uptime": _uci_bool("show_uptime", "0"),
+        "show_ip": _uci_bool("show_ip", "0"),
+        "dash_interval": uci_get("dash_interval", "5"),
+        # touch control
+        "touch_enable": _uci_bool("touch_enable", "1"),
+        "touch_action": uci_get("touch_action", "next"),
+        "touch_swap_xy": _uci_bool("touch_swap_xy", "0"),
+        "touch_flip_x": _uci_bool("touch_flip_x", "0"),
+        # custom panel layout (parsed JSON object)
+        "custom_layout": _custom_layout(),
+        "custom_bg_dir": uci_get("custom_bg_dir", ""),
+        "custom_bg_frames": int(uci_get("custom_bg_frames", "0") or 0),
+        "custom_bg_fps": int(uci_get("custom_bg_fps", "8") or 8),
+    }
+
+
+cfg = load_config()
+
+fb = None
+orig_brightness = None
+original_stopped = False
+stop_flag = False
+SOURCE = ""
+
+
+def write_status(**kw):
+    base = {
+        "running": "1", "mode": cfg["mode"], "dir": cfg["frames_dir"],
+        "brightness": cfg["brightness"], "frame_count": "0", "current": "0",
+        "source": SOURCE, "error": ""
+    }
+    base.update(kw)
+    try:
+        with open(STATUS, "w") as f:
+            for k, v in base.items():
+                f.write("%s=%s\n" % (k, v))
+    except Exception:
+        pass
+
+
+def restore_original():
+    if original_stopped and cfg["keep_original"]:
+        sh("%s enable 2>/dev/null" % SCREEN_INIT)
+        sh("%s start 2>/dev/null" % SCREEN_INIT)
+    if orig_brightness is not None:
+        try:
+            with open(BL, "w") as f:
+                f.write(str(orig_brightness))
+        except Exception:
+            pass
+
+
+def stop_original():
+    global original_stopped, orig_brightness
+    try:
+        with open(BL) as f:
+            orig_brightness = int(f.read().strip())
+    except Exception:
+        orig_brightness = None
+    sh("%s disable 2>/dev/null" % SCREEN_INIT)
+    sh("%s stop 2>/dev/null" % SCREEN_INIT)
+    sh("kill -9 $(pidof gl_screen) 2>/dev/null")
+    original_stopped = True
+    time.sleep(1)
+
+
+def set_brightness(b):
+    try:
+        b = int(b)
+        b = max(0, min(11, b))
+        with open(BL, "w") as f:
+            f.write(str(b))
+    except Exception:
+        pass
+
+
+def load_frames():
+    manifest_path = os.path.join(cfg["frames_dir"], "manifest.json")
+    frames = []
+    meta = {}
+    if os.path.exists(manifest_path):
+        try:
+            meta = json.load(open(manifest_path))
+            for fr in meta.get("frames", []):
+                p = os.path.join(cfg["frames_dir"], fr["file"])
+                if os.path.exists(p):
+                    frames.append({
+                        "path": p,
+                        "delay": int(fr.get("delay_ms", 100))
+                    })
+        except Exception as e:
+            write_status(running="0", error="manifest parse: %s" % e)
+    return frames, meta
+
+
+def on_term(signum, frame):
+    global stop_flag
+    stop_flag = True
+
+
+signal.signal(signal.SIGTERM, on_term)
+signal.signal(signal.SIGINT, on_term)
+
+def run_dashboard():
+    if dash is None:
+        write_status(running="0", error="dashboard module missing")
+        restore_original()
+        return
+    dfb = None
+    try:
+        dfb = os.open(FB, os.O_RDWR)
+    except Exception as e:
+        write_status(running="0", error="fb0 open: %s" % e)
+        restore_original()
+        return
+
+    if cfg["keep_original"]:
+        stop_original()
+    set_brightness(cfg["brightness"])
+    write_status(mode=cfg["mode"],
+                 source=("custom layout" if cfg["mode"] == "custom" else "system panel"),
+                 frame_count=0, current=0)
+
+    reason = None
+    try:
+        reason = dash.run_dashboard(
+            cfg, dfb,
+            should_stop=lambda: stop_flag,
+            write_status=write_status,
+            exit_requested=lambda: globals().__setitem__("stop_flag", True))
+    except Exception as e:
+        write_status(running="0", error=str(e))
+    finally:
+        try:
+            os.close(dfb)
+        except Exception:
+            pass
+        restore_original()
+
+    if reason == "exit":
+        # Long-press handed the panel back to OEM; persist the disabled state so
+        # procd (and the next service start) do not bring the daemon back up.
+        write_status(running="0", mode="dashboard", error="")
+        sh("uci set glanim.globals.enabled=0; uci commit glanim 2>/dev/null")
+
+
+if cfg["mode"] in ("dashboard", "custom"):
+    run_dashboard()
+    sys.exit(0)
+
+
+frames, meta = load_frames()
+SOURCE = meta.get("source", "")
+
+if not frames:
+    write_status(running="0", error="no frames in " + cfg["frames_dir"],
+                 frame_count=0)
+    restore_original()
+    sys.exit(2)
+
+try:
+    fb = os.open(FB, os.O_RDWR)
+except Exception as e:
+    write_status(running="0", error="fb0 open: %s" % e)
+    restore_original()
+    sys.exit(3)
+
+if cfg["keep_original"]:
+    stop_original()
+set_brightness(cfg["brightness"])
+
+frame_count = len(frames)
+idx = 0
+write_status(frame_count=frame_count, current=0,
+             source=meta.get("source", ""))
+
+try:
+    while not stop_flag:
+        fr = frames[idx]
+        try:
+            with open(fr["path"], "rb") as f:
+                data = f.read()
+            if len(data) == FB_BYTES:
+                os.lseek(fb, 0, os.SEEK_SET)
+                os.write(fb, data)
+            else:
+                write_status(error="frame size %d != %d" %
+                             (len(data), FB_BYTES))
+        except Exception as e:
+            write_status(error=str(e))
+
+        write_status(current=idx, frame_count=frame_count)
+
+        if cfg["mode"] == "still":
+            delay_ms = 500
+        elif cfg["fps"] > 0:
+            delay_ms = 1000 // cfg["fps"]
+        else:
+            delay_ms = fr["delay"]
+
+        if cfg["mode"] != "still":
+            idx += 1
+            if idx >= frame_count:
+                if cfg["mode"] == "slideshow":
+                    idx = frame_count - 1
+                elif not cfg["loop"]:
+                    break
+                else:
+                    idx = 0
+
+        time.sleep(delay_ms / 1000.0)
+except Exception as e:
+    write_status(running="0", error=str(e))
+finally:
+    try:
+        os.close(fb)
+    except Exception:
+        pass
+    restore_original()

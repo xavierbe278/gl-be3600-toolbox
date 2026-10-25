@@ -1,0 +1,211 @@
+#!/bin/sh
+# glfanctl - User fan policy daemon for GL-BE3600 (IPQ5332)
+# Writes PWM to /sys/class/hwmon/hwmon0/pwm1 (0..255, positive polarity:
+# higher value = faster). OEM service: /etc/init.d/gl_fan (PID control).
+
+. /lib/functions.sh
+
+STATUS=/tmp/glfanctl.status
+PWM_NODE=/sys/class/hwmon/hwmon0/pwm1
+RPM_NODE=/sys/class/hwmon/hwmon0/fan1_input
+OEM=/etc/init.d/gl_fan
+THERMAL_BASE=/sys/devices/virtual/thermal
+
+enabled="0"
+mode="auto"
+zone="0"
+poll="2"
+hyst="2"
+manual="40"
+minp="0"
+maxp="255"
+restore_oem="1"
+# 10 speed-percentage steps at fixed 10..100 C (0..100)
+pct1="0"; pct2="0"; pct3="0"; pct4="0"; pct5="7"
+pct6="25"; pct7="49"; pct8="75"; pct9="94"; pct10="100"
+# legacy six-point table
+t1=45; p1=0
+t2=55; p2=35
+t3=65; p3=90
+t4=75; p4=160
+t5=85; p5=224
+t6=95; p6=255
+
+load_cfg() {
+	local section="$1"
+	config_get enabled "$section" enabled
+	config_get mode "$section" mode
+	config_get zone "$section" temp_zone
+	config_get poll "$section" poll
+	config_get hyst "$section" hysteresis
+	config_get manual "$section" pwm_manual
+	config_get minp "$section" min_pwm
+	config_get maxp "$section" max_pwm
+	config_get restore_oem "$section" restore_oem
+	config_get pct1 "$section" pct1; config_get pct2 "$section" pct2
+	config_get pct3 "$section" pct3; config_get pct4 "$section" pct4
+	config_get pct5 "$section" pct5; config_get pct6 "$section" pct6
+	config_get pct7 "$section" pct7; config_get pct8 "$section" pct8
+	config_get pct9 "$section" pct9; config_get pct10 "$section" pct10
+	config_get t1 "$section" t1; config_get p1 "$section" p1
+	config_get t2 "$section" t2; config_get p2 "$section" p2
+	config_get t3 "$section" t3; config_get p3 "$section" p3
+	config_get t4 "$section" t4; config_get p4 "$section" p4
+	config_get t5 "$section" t5; config_get p5 "$section" p5
+	config_get t6 "$section" t6; config_get p6 "$section" p6
+}
+
+config_load glfanctl
+config_foreach load_cfg globals
+
+[ -z "$enabled" ]  && enabled="0"
+[ -z "$mode" ]     && mode="auto"
+[ -z "$zone" ]     && zone="0"
+[ -z "$poll" ]     && poll="2"
+[ -z "$hyst" ]     && hyst="2"
+[ -z "$manual" ]  && manual="40"
+[ -z "$minp" ]     && minp="0"
+[ -z "$maxp" ]     && maxp="255"
+[ -z "$restore_oem" ] && restore_oem="1"
+
+clamp() {
+	local v="$1" lo="$2" hi="$3"
+	[ -z "$v" ] && v="$lo"
+	[ "$v" -lt "$lo" ] 2>/dev/null && v="$lo"
+	[ "$v" -gt "$hi" ] 2>/dev/null && v="$hi"
+	echo "$v"
+}
+
+pct_to_pwm() {
+	local p="$1"
+	[ -z "$p" ] && p=0
+	awk -v p="$p" 'BEGIN{ printf "%d", (p*255+50)/100 }'
+}
+
+# Build the active curve table. Use the 10-step percentage table when any of
+# its entries is present; otherwise fall back to the legacy six-point table.
+T_LIST=""; P_LIST=""; N=0
+if [ -n "$pct1" ] || [ -n "$pct10" ]; then
+	i=1
+	while [ "$i" -le 10 ]; do
+		eval pp="\$pct$i"
+		tt=$((i*10))
+		ppw=$(pct_to_pwm "$pp")
+		T_LIST="$T_LIST $tt"
+		P_LIST="$P_LIST $ppw"
+		N=$((N+1))
+		i=$((i+1))
+	done
+else
+	N=6
+	T_LIST="$t1 $t2 $t3 $t4 $t5 $t6"
+	P_LIST="$p1 $p2 $p3 $p4 $p5 $p6"
+fi
+
+read_temp() {
+	local raw
+	raw=$(cat "$THERMAL_BASE/thermal_zone$zone/temp" 2>/dev/null)
+	[ -z "$raw" ] && raw=0
+	echo $((raw/1000))
+}
+
+curve_pwm() {
+	local T="$1"
+	awk -v T="$T" -v N="$N" -v ts="$T_LIST" -v ps="$P_LIST" '
+	BEGIN {
+		split(ts, t, " "); split(ps, p, " ")
+		if (T <= t[1]) { printf "%d", p[1]; exit }
+		if (T >= t[N]) { printf "%d", p[N]; exit }
+		for (i=2; i<=N; i++) {
+			if (T <= t[i]) {
+				f=(T-t[i-1])/(t[i]-t[i-1]);
+				v=p[i-1]+f*(p[i]-p[i-1]);
+				if (v<0) v=0; if (v>255) v=255;
+				printf "%d", v; exit
+			}
+		}
+	}'
+}
+
+stop_oem() {
+	$OEM stop 2>/dev/null
+	local pid
+	pid=$(pidof gl_fan)
+	[ -n "$pid" ] && kill -9 $pid 2>/dev/null
+}
+
+start_oem() {
+	$OEM start 2>/dev/null
+}
+
+write_status() {
+	local temp="$1" pwm="$2" rpm="$3"
+	{
+		echo "enabled=$enabled"
+		echo "mode=$mode"
+		echo "zone=$zone"
+		echo "temp=$temp"
+		echo "pwm=$pwm"
+		echo "rpm=$rpm"
+		echo "poll=$poll"
+		if pidof gl_fan >/dev/null 2>&1; then
+			echo "oem_running=1"
+		else
+			echo "oem_running=0"
+		fi
+		echo "uptime=$(date +%s)"
+	} > "$STATUS" 2>/dev/null
+}
+
+cleanup() {
+	if [ "$restore_oem" = "1" ]; then
+		start_oem
+	fi
+	rm -f "$STATUS"
+	exit 0
+}
+
+trap cleanup EXIT TERM INT
+
+last_pwm=-1
+
+while true; do
+	temp=$(read_temp)
+	rpm=$(cat "$RPM_NODE" 2>/dev/null)
+	[ -z "$rpm" ] && rpm=0
+
+	case "$mode" in
+		auto)
+			pidof gl_fan >/dev/null 2>&1 || start_oem
+			cur=$(cat "$PWM_NODE" 2>/dev/null)
+			write_status "$temp" "$cur" "$rpm"
+			;;
+		curve)
+			pidof gl_fan >/dev/null 2>&1 && stop_oem
+			target=$(curve_pwm "$temp")
+			target=$(clamp "$target" "$minp" "$maxp")
+			# hysteresis: skip trivial PWM dithering
+			if [ "$last_pwm" -lt 0 ] || [ $((target-last_pwm)) -ge 3 ] 2>/dev/null || [ $((last_pwm-target)) -ge 3 ] 2>/dev/null; then
+				echo "$target" > "$PWM_NODE"
+				last_pwm="$target"
+			fi
+			write_status "$temp" "$target" "$rpm"
+			;;
+		manual)
+			pidof gl_fan >/dev/null 2>&1 && stop_oem
+			target=$(clamp "$manual" "$minp" "$maxp")
+			echo "$target" > "$PWM_NODE"
+			write_status "$temp" "$target" "$rpm"
+			;;
+		stop)
+			pidof gl_fan >/dev/null 2>&1 && stop_oem
+			echo 0 > "$PWM_NODE"
+			write_status "$temp" 0 "$rpm"
+			;;
+		*)
+			write_status "$temp" "-" "$rpm"
+			;;
+	esac
+
+	sleep "$poll"
+done

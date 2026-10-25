@@ -1,0 +1,4 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+rm -f /tmp/glfanctl.status
+exit 0

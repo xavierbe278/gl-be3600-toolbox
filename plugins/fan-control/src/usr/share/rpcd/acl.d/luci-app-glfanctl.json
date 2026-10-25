@@ -1,0 +1,16 @@
+{
+	"luci-app-glfanctl": {
+		"description": "Grant UCI access for luci-app-glfanctl",
+		"read": {
+			"uci": [ "glfanctl" ],
+			"file": {
+				"/sys/class/hwmon/hwmon0/pwm1": [ "read" ],
+				"/sys/class/hwmon/hwmon0/fan1_input": [ "read" ],
+				"/tmp/glfanctl.status": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "glfanctl" ]
+		}
+	}
+}

@@ -1,0 +1,6 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+/etc/init.d/glfanctl stop 2>/dev/null
+# Hand the fan back to the OEM service.
+/etc/init.d/gl_fan start 2>/dev/null
+exit 0

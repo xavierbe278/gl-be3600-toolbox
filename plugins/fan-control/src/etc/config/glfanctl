@@ -1,0 +1,49 @@
+config globals 'globals'
+	# Master switch. 0 = leave OEM gl_fan untouched, plugin daemon idles.
+	option enabled '0'
+	# auto   : do not touch PWM, OEM gl_fan keeps PID control
+	# curve  : plugin drives PWM by the temperature/PWM curve below
+	# manual : plugin drives a fixed PWM value
+	# stop   : fan off (debug only, overheat risk)
+	option mode 'auto'
+	# thermal zone index 0..4 on this device
+	option temp_zone '0'
+	# poll interval seconds
+	option poll '2'
+	# hysteresis degrees C to avoid PWM hunting around a threshold
+	option hysteresis '2'
+	# fixed PWM for manual mode (0..255)
+	option pwm_manual '40'
+	# safety clamp range for curve mode
+	option min_pwm '0'
+	option max_pwm '255'
+	# OEM service restart policy on plugin exit / disable
+	option restore_oem '1'
+
+	# Curve editor: fixed temperature steps 10..100 C, each a fan speed
+	# percentage 0..100 (PWM = pct/100*255, clamped by min_pwm/max_pwm).
+	option pct1 '0'
+	option pct2 '0'
+	option pct3 '0'
+	option pct4 '0'
+	option pct5 '7'
+	option pct6 '25'
+	option pct7 '49'
+	option pct8 '75'
+	option pct9 '94'
+	option pct10 '100'
+
+	# Legacy six-point table (kept for backward compatible configs;
+	# daemon falls back to these only when the pct table above is empty).
+	option t1 '45'
+	option p1 '0'
+	option t2 '55'
+	option p2 '35'
+	option t3 '65'
+	option p3 '90'
+	option t4 '75'
+	option p4 '160'
+	option t5 '85'
+	option p5 '224'
+	option t6 '95'
+	option p6 '255'

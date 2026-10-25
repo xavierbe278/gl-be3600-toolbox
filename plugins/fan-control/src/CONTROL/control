@@ -1,0 +1,9 @@
+Package: luci-app-glfanctl
+Version: 1.0.4-1
+Depends: luci, luci-compat, rpcd
+Architecture: aarch64_cortex-a53_neon-vfpv4
+Section: luci
+Priority: optional
+Title: Fan Control for GL-BE3600
+Maintainer: local
+Description: Custom fan policy daemon with LuCI page for the GL-BE3600 PWM fan. Supports OEM PID, temperature curve, fixed PWM and stop modes; restores the original gl_fan service on disable.

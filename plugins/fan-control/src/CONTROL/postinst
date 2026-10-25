@@ -1,0 +1,13 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+chmod 755 /etc/init.d/glfanctl /usr/bin/glfanctl
+chmod 644 /etc/config/glfanctl
+chown -R root:root /usr/lib/lua/luci/controller/glfanctl.lua \
+  /usr/lib/lua/luci/model/cbi/glfanctl /usr/share/rpcd/acl.d/luci-app-glfanctl.json 2>/dev/null
+rm -f /tmp/glfanctl.status
+if [ "$(uci get glfanctl.globals.enabled 2>/dev/null)" = "1" ]; then
+  /etc/init.d/glfanctl restart >/dev/null 2>&1
+fi
+
+echo "luci-app-glfanctl installed. Open LuCI -> Services -> Fan Control."
+exit 0
