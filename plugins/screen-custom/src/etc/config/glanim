@@ -12,6 +12,9 @@ config globals 'globals'
 	option custom_bg_dir '/usr/share/glanim/custom_bg'
 	option custom_bg_frames '0'
 	option custom_bg_fps '8'
+	option bg_mask '20'
+	option bg_blur '0'
+	option content_alpha '100'
 	option frames_dir '/usr/share/glanim/frames'
 	# Force frame interval in fps; 0 = use per-frame delay from manifest
 	option fps '0'
@@ -35,6 +38,7 @@ config globals 'globals'
 	option show_ip '0'
 	# seconds between auto-rotating dashboard pages, 2..30
 	option dash_interval '5'
+	option auto_rotate '1'
 
 	# ---- touch control (CST816X /dev/input/event0) ----
 	option touch_enable '1'

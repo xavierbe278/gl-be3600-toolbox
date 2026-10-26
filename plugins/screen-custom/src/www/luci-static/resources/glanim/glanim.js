@@ -15,7 +15,9 @@
   var PACK = CFG.pack || { count: 0, delays: [], valid: false, source: "" };
   var STATUS = CFG.status || {};
   var CUSTOM = clone(CFG.custom || defaultCustomLayout());
+  var FONT_MODE = "classic";
   var customSelected = -1;
+  var CUSTOM_BG = null;
 
   var MAX_FRAMES = 300;              // browser-decoded GIF / video / background
   var MAX_DECODE_PIXELS = 24000000;  // total decoded RGBA pixels across all frames
@@ -82,10 +84,11 @@
   var WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
   var MODE_LABEL = {
-    gif: ZH ? "GIF 循环" : "GIF loop",
+    gif: ZH ? "帧包 / GIF / 图片" : "Frames / GIF / image",
     still: ZH ? "静态图片" : "Still image",
     slideshow: ZH ? "幻灯片" : "Slideshow",
     dashboard: ZH ? "系统面板" : "System panel",
+    clash: ZH ? "OpenClash 状态" : "OpenClash status",
     custom: ZH ? "自定义面板" : "Custom panel"
   };
   var PAGE_LABEL = { clock: ZH ? "时钟" : "Clock", status: ZH ? "状态" : "Status" };
@@ -105,12 +108,24 @@
     { key: "ip", label: "LAN IP", unit: "" },
     { key: "wan_ip", label: "WAN IP", unit: "" },
     { key: "iface", label: ZH ? "网卡" : "IFACE", unit: "" },
-    { key: "hostname", label: ZH ? "主机名" : "HOST", unit: "" }
+    { key: "hostname", label: ZH ? "主机名" : "HOST", unit: "" },
+    { key: "oc_status", label: "CLASH", unit: "" },
+    { key: "oc_rx", label: "CLASH RX", unit: "KB/s" },
+    { key: "oc_tx", label: "CLASH TX", unit: "KB/s" },
+    { key: "oc_total", label: ZH ? "累计流量" : "TOTAL", unit: "" },
+    { key: "oc_conns", label: ZH ? "连接数" : "CONN", unit: "" },
+    { key: "oc_mode", label: "CLASH MODE", unit: "" },
+    { key: "oc_mem", label: "CLASH MEM", unit: "MB" },
+    { key: "oc_uptime", label: ZH ? "运行时长" : "CLASH UP", unit: "" }
   ];
 
   var S = {
     enabled: !!CURRENT.enabled,
     mode: CURRENT.mode || "gif",
+    bgMask: num((CFG.customBg || {}).mask, 20),
+    autoRotate: !!CURRENT.autoRotate,
+    bgBlur: num((CFG.customBg || {}).blur, 0),
+    contentAlpha: num((CFG.customBg || {}).alpha, 100),
     fps: num(CURRENT.fps, 0),
     loop: !!CURRENT.loop,
     brightness: num(CURRENT.brightness, 4),
@@ -135,6 +150,7 @@
 
   var STATUS_BUSY = false;
   var previewPage = null;
+  var previewPageManual = false;
   var toastTimer = null;
   var saving = false;
 
@@ -274,26 +290,36 @@
   }
 
 
-  function pixelWidth(text, scale) {
-    return Math.max(0, String(text).length * 6 * scale - scale);
+  function pixelWidth(text, scale, font) {
+    font = font || FONT_MODE;
+    var w = font === "compact" ? 4 : 5;
+    return Math.max(0, String(text).length * (w + 1) * scale - scale);
   }
 
-  function drawPixelText(ctx, x, y, text, color, scale) {
+  function drawPixelText(ctx, x, y, text, color, scale, shadow) {
+    ctx.save();
+    ctx.globalAlpha = clamp(num(S.contentAlpha, 100) / 100, 0, 1);
+    if (shadow === undefined) shadow = !!CUSTOM_BG;
+    if (shadow) drawPixelText(ctx, x + 1, y + 1, text, "#000000", scale, false);
     scale = Math.max(1, Math.min(4, Math.round(scale || 1)));
+    var w = FONT_MODE === "compact" ? 4 : 5;
+    var adv = w + 1;
     ctx.fillStyle = color;
     var cx = Math.round(x);
     String(text).toUpperCase().split("").forEach(function (ch) {
       var cols = PIXEL_FONT[ch] || PIXEL_FONT[" "];
-      for (var c = 0; c < 5; c++) {
+      for (var c = 0; c < w; c++) {
         var bits = cols[c] || 0;
+        if (FONT_MODE === "bold") bits = (bits | (bits >> 1) | (bits << 1)) & 0x7F;
         for (var r = 0; r < 7; r++) {
           if ((bits >> r) & 1) {
             ctx.fillRect(cx + c * scale, Math.round(y) + r * scale, scale, scale);
           }
         }
       }
-      cx += 6 * scale;
+      cx += adv * scale;
     });
+    ctx.restore();
     return cx;
   }
 
@@ -310,7 +336,7 @@
       .then(function (json) {
         STATUS = json || {};
         updateStatusUI();
-        if (S.mode === "dashboard" || S.mode === "custom") drawPreview();
+        if (S.mode === "dashboard" || S.mode === "custom" || S.mode === "clash") drawPreview();
         if (S.mode === "custom") {
           drawCustomEditor();
           renderCustomPalette();
@@ -336,6 +362,16 @@
 
     setText("gl-pill-daemon", daemon ? (ZH ? "运行中" : "running") : (ZH ? "已停止" : "stopped"));
     setText("gl-pill-mode", daemon ? modeLabel(STATUS.mode) : modeLabel(S.mode));
+    var ocBadge = $("glanim-oc-badge");
+    if (ocBadge) {
+      ocBadge.textContent = STATUS.oc_running === "1"
+        ? (ZH ? "运行中" : "running")
+        : (ZH ? "已停止" : "stopped");
+    }
+    var ocMode = $("glanim-oc-mode");
+    if (ocMode && STATUS.oc_mode) {
+      ocMode.textContent = (ZH ? "模式" : "Mode") + ": " + STATUS.oc_mode;
+    }
     var frames = num(STATUS.frame_count, 0);
     if (frames > 0) {
       setText("gl-pill-frames", (num(STATUS.current, 0) + 1) + "/" + frames);
@@ -375,21 +411,21 @@
 
     var empty = $("glanim-screen-empty");
     if (empty) {
-      var showEmpty = S.mode !== "dashboard" && S.mode !== "custom" && PACK.count === 0;
+      var showEmpty = S.enabled && S.mode !== "dashboard" && S.mode !== "custom" && S.mode !== "clash" && PACK.count === 0;
       empty.className = "gl-screen-empty" + (showEmpty ? " is-on" : "");
     }
 
-    var dash = daemon && STATUS.mode === "dashboard";
-    setText("gl-kpi-cpu", dash ? (num(STATUS.cpu, 0) + "%") : "–");
-    setText("gl-kpi-mem", dash ? (num(STATUS.mem, 0) + "%") : "–");
-    setText("gl-kpi-temp", dash ? (num(STATUS.temp, 0) + "°C") : "–");
-    setText("gl-kpi-net", dash
+    setText("gl-kpi-cpu", daemon ? (num(STATUS.cpu, 0) + "%") : "–");
+    setText("gl-kpi-mem", daemon ? (num(STATUS.mem, 0) + "%") : "–");
+    setText("gl-kpi-temp", daemon ? (num(STATUS.temp, 0) + "°C") : "–");
+    setText("gl-kpi-net", daemon
       ? ("↓ " + fmtSpeed(STATUS.rx_kbps) + "  ↑ " + fmtSpeed(STATUS.tx_kbps))
       : "–");
 
+    var dash = daemon && STATUS.mode === "dashboard";
     var touch = $("glanim-touch-live");
     if (touch) {
-      if (dash) {
+      if (daemon) {
         var present = STATUS.touch_present === "1";
         touch.textContent = (ZH ? "触屏" : "Touch") + " · "
           + (present ? (ZH ? "在线" : "online") : (ZH ? "未检测到" : "not found"))
@@ -417,6 +453,8 @@
   var packFrames = [];
   var packIndex = 0;
   var packTimer = null;
+  var maskTimer = null;
+  var brightTimer = null;
   var packLoading = false;
 
   function previewCanvas() {
@@ -427,6 +465,344 @@
     return pvCtx;
   }
 
+  function fmtBytes(n) {
+    n = Math.max(0, num(n, 0));
+    if (n >= 1073741824) return (n / 1073741824).toFixed(2) + "GB";
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + "MB";
+    if (n >= 1024) return Math.floor(n / 1024) + "KB";
+    return Math.floor(n) + "B";
+  }
+
+  function drawLineH(ctx, y, x1, x2, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x1, y, Math.max(0, x2 - x1), 1);
+  }
+
+  function drawLineV(ctx, x, y1, y2, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y1, 1, Math.max(0, y2 - y1));
+  }
+
+  function drawNav(ctx) { return; }
+
+
+  var COUNTRY_COLORS = {
+    US: ["#b22234", "#ffffff", "#3c3b6e"], CN: ["#de2910", "#ffde3c", "#de2910"],
+    HK: ["#de2910", "#ffffff", "#de2910"], TW: ["#0046a0", "#ffffff", "#dc2832"],
+    JP: ["#ffffff", "#dc2832", "#ffffff"], KR: ["#ffffff", "#1e1e1e", "#c8283c"],
+    SG: ["#dc2832", "#ffffff", "#dc2832"], GB: ["#1e3c8c", "#ffffff", "#c8283c"],
+    DE: ["#1e1e1e", "#dc2832", "#ffd228"], FR: ["#1e3ca0", "#ffffff", "#dc2832"]
+  };
+
+  var COUNTRY_ZH = {
+    US: "美国", HK: "香港", JP: "日本", SG: "新加坡", TW: "台湾",
+    KR: "韩国", GB: "英国", DE: "德国", FR: "法国", CA: "加拿大",
+    AU: "澳大利亚", NL: "荷兰", RU: "俄罗斯", CN: "中国", IN: "印度",
+    TR: "土耳其", BR: "巴西", AR: "阿根廷", MY: "马来西亚", TH: "泰国",
+    VN: "越南", PH: "菲律宾", ID: "印尼"
+  };
+
+  function drawCJK(ctx, text, x, y, color) {
+    if (!text) return;
+    ctx.save();
+    ctx.globalAlpha = clamp(num(S.contentAlpha, 100) / 100, 0, 1);
+    ctx.font = "12px sans-serif";
+    ctx.textBaseline = "top";
+    if (CUSTOM_BG) {
+      ctx.fillStyle = "#000";
+      ctx.fillText(text, x + 1, y + 1);
+    }
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function flagRect(ctx, x, y, w, h, c) {
+    ctx.fillStyle = c; ctx.fillRect(x, y, w, h);
+  }
+
+  function flagCircle(ctx, cx, cy, r, c) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill();
+  }
+
+  function flagLine(ctx, x1, y1, x2, y2, c, w) {
+    ctx.strokeStyle = c; ctx.lineWidth = w || 1;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  function flagPoly(ctx, pts, c) {
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath(); ctx.fillStyle = c; ctx.fill();
+  }
+
+  function flagStar(ctx, cx, cy, r, c) {
+    var pts = [];
+    for (var i = 0; i < 10; i++) {
+      var ang = -Math.PI / 2 + i * Math.PI / 5;
+      var rr = i % 2 === 0 ? r : r * 0.42;
+      pts.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr]);
+    }
+    flagPoly(ctx, pts, c);
+  }
+
+  function flagUnionJack(ctx, x, y, w, h) {
+    var b = "#0c1c48", wh = "#f5f5f5", rd = "#be202c";
+    flagRect(ctx, x, y, w, h, b);
+    flagLine(ctx, x, y, x + w - 1, y + h - 1, wh, 5);
+    flagLine(ctx, x + w - 1, y, x, y + h - 1, wh, 5);
+    flagLine(ctx, x, y, x + w - 1, y + h - 1, rd, 2);
+    flagLine(ctx, x + w - 1, y, x, y + h - 1, rd, 2);
+    flagRect(ctx, x + w / 2 - 4, y, 8, h, wh);
+    flagRect(ctx, x, y + h / 2 - 4, w, 8, wh);
+    flagRect(ctx, x + w / 2 - 2, y, 4, h, rd);
+    flagRect(ctx, x, y + h / 2 - 2, w, 4, rd);
+  }
+
+  function drawCountryFlag(ctx, x, y, cc) {
+    var w = 54, h = 36;
+    var red = "#c82434", white = "#f5f5f5", blue = "#122a6e";
+    var black = "#141418", yellow = "#f5c830", green = "#146e40";
+    flagRect(ctx, x, y, w, h, "#0a0c12");
+    if (cc === "US") {
+      for (var i = 0; i < 13; i++) flagRect(ctx, x, y + i * h / 13, w, h / 13, i % 2 === 0 ? red : white);
+      flagRect(ctx, x, y, w * 0.45, h / 2, blue);
+      for (var r = 0; r < 3; r++) for (var c = 0; c < 4; c++) flagCircle(ctx, x + 4 + c * 5, y + 4 + r * 5, 1, white);
+    } else if (cc === "JP") {
+      flagRect(ctx, x, y, w, h, white); flagCircle(ctx, x + w / 2, y + h / 2, 10, red);
+    } else if (cc === "CN") {
+      flagRect(ctx, x, y, w, h, red); flagStar(ctx, x + 10, y + 10, 7, yellow);
+      [[20, 5], [24, 10], [24, 16], [20, 21]].forEach(function (p) { flagStar(ctx, x + p[0], y + p[1], 2, yellow); });
+    } else if (cc === "HK") {
+      flagRect(ctx, x, y, w, h, red);
+      for (var k = 0; k < 5; k++) {
+        var a = -Math.PI / 2 + k * 2 * Math.PI / 5;
+        flagCircle(ctx, x + w / 2 + Math.cos(a) * 6, y + h / 2 + Math.sin(a) * 6, 4, white);
+      }
+      flagCircle(ctx, x + w / 2, y + h / 2, 3, white);
+    } else if (cc === "TW") {
+      flagRect(ctx, x, y, w, h, red); flagRect(ctx, x, y, w / 2, h / 2, blue);
+      flagCircle(ctx, x + w / 4, y + h / 4, 5, white);
+      for (var t = 0; t < 8; t++) {
+        var ta = t * Math.PI / 4;
+        flagLine(ctx, x + w / 4, y + h / 4, x + w / 4 + Math.cos(ta) * 9, y + h / 4 + Math.sin(ta) * 9, white, 1);
+      }
+    } else if (cc === "KR") {
+      flagRect(ctx, x, y, w, h, white);
+      var kx = x + w / 2, ky = y + h / 2, kr = 9;
+      flagCircle(ctx, kx, ky, kr, red);
+      ctx.beginPath(); ctx.arc(kx, ky, kr, 0, Math.PI); ctx.fillStyle = blue; ctx.fill();
+      flagCircle(ctx, kx - 3, ky - 3, 4, red); flagCircle(ctx, kx + 3, ky + 3, 4, blue);
+      [[5, 5], [w - 12, 5], [5, h - 8], [w - 12, h - 8]].forEach(function (p) {
+        for (var j = 0; j < 3; j++) flagRect(ctx, x + p[0], y + p[1] + j * 3, 8, 1, black);
+      });
+    } else if (cc === "GB") {
+      flagUnionJack(ctx, x, y, w, h);
+    } else if (cc === "DE") {
+      [black, red, "#f0be28"].forEach(function (co, i) { flagRect(ctx, x, y + i * h / 3, w, h / 3, co); });
+    } else if (cc === "FR") {
+      [blue, white, red].forEach(function (co, i) { flagRect(ctx, x + i * w / 3, y, w / 3, h, co); });
+    } else if (cc === "NL") {
+      [red, white, blue].forEach(function (co, i) { flagRect(ctx, x, y + i * h / 3, w, h / 3, co); });
+    } else if (cc === "RU") {
+      [white, blue, red].forEach(function (co, i) { flagRect(ctx, x, y + i * h / 3, w, h / 3, co); });
+    } else if (cc === "TH") {
+      var bands = [[red, 6], [white, 6], [blue, 12], [white, 6], [red, 6]], yy = y;
+      bands.forEach(function (b) { flagRect(ctx, x, yy, w, b[1], b[0]); yy += b[1]; });
+    } else if (cc === "ID") {
+      flagRect(ctx, x, y, w, h / 2, red); flagRect(ctx, x, y + h / 2, w, h / 2, white);
+    } else if (cc === "SG") {
+      flagRect(ctx, x, y, w, h / 2, red); flagRect(ctx, x, y + h / 2, w, h / 2, white);
+      flagCircle(ctx, x + 14, y + 9, 8, white); flagCircle(ctx, x + 18, y + 9, 7, red);
+      [[22, 4], [27, 7], [27, 13], [21, 15], [18, 10]].forEach(function (p) { flagCircle(ctx, x + p[0], y + p[1], 1, white); });
+    } else if (cc === "CA") {
+      flagRect(ctx, x, y, w, h, white); flagRect(ctx, x, y, w / 4, h, red); flagRect(ctx, x + w - w / 4, y, w / 4, h, red);
+      flagPoly(ctx, [[x + w / 2, y + 7], [x + w / 2 - 4, y + 15], [x + w / 2 - 1, y + 15],
+        [x + w / 2 - 4, y + 23], [x + w / 2 + 4, y + 23], [x + w / 2 + 1, y + 15], [x + w / 2 + 4, y + 15]], red);
+    } else if (cc === "AU") {
+      flagRect(ctx, x, y, w, h, blue); flagUnionJack(ctx, x, y, w / 2, h / 2);
+      [[35, 8, 2], [44, 14, 2], [38, 27, 2], [47, 25, 1], [30, 28, 1]].forEach(function (p) { flagStar(ctx, x + p[0], y + p[1], p[2], white); });
+    } else if (cc === "IN") {
+      ["#ff9933", white, "#138808"].forEach(function (co, i) { flagRect(ctx, x, y + i * h / 3, w, h / 3, co); });
+      flagCircle(ctx, x + w / 2, y + h / 2, 5, "#142896"); flagCircle(ctx, x + w / 2, y + h / 2, 3, white);
+    } else if (cc === "TR") {
+      flagRect(ctx, x, y, w, h, red); flagCircle(ctx, x + 20, y + h / 2, 8, white); flagCircle(ctx, x + 24, y + h / 2, 8, red);
+      flagStar(ctx, x + 35, y + h / 2, 5, white);
+    } else if (cc === "BR") {
+      flagRect(ctx, x, y, w, h, green);
+      flagPoly(ctx, [[x + 27, y + 4], [x + 50, y + 18], [x + 27, y + 32], [x + 4, y + 18]], yellow);
+      flagCircle(ctx, x + 27, y + 18, 7, blue); flagLine(ctx, x + 20, y + 20, x + 34, y + 16, white, 1);
+    } else if (cc === "AR") {
+      ["#78beeb", white, "#78beeb"].forEach(function (co, i) { flagRect(ctx, x, y + i * h / 3, w, h / 3, co); });
+      flagCircle(ctx, x + w / 2, y + h / 2, 4, yellow);
+    } else if (cc === "MY") {
+      for (var m = 0; m < 14; m++) flagRect(ctx, x, y + m * h / 14, w, h / 14, m % 2 === 0 ? red : white);
+      flagRect(ctx, x, y, w / 2, h / 2, blue);
+      flagCircle(ctx, x + 12, y + 9, 5, yellow); flagCircle(ctx, x + 15, y + 9, 4, blue); flagStar(ctx, x + 20, y + 9, 3, yellow);
+    } else if (cc === "VN") {
+      flagRect(ctx, x, y, w, h, red); flagStar(ctx, x + w / 2, y + h / 2, 8, yellow);
+    } else if (cc === "PH") {
+      flagRect(ctx, x, y, w, h / 2, blue); flagRect(ctx, x, y + h / 2, w, h / 2, red);
+      flagPoly(ctx, [[x, y], [x + 22, y + h / 2], [x, y + h]], white);
+      flagCircle(ctx, x + 7, y + h / 2, 3, yellow);
+      [7, 29].forEach(function (py) { flagCircle(ctx, x + 17, y + py, 1, yellow); });
+    } else {
+      var cols = COUNTRY_COLORS[cc] || ["#3a4254", "#5a6478", "#3a4254"];
+      cols.forEach(function (co, i) { flagRect(ctx, x, y + i * h / 3, w, h / 3, co); });
+    }
+    ctx.strokeStyle = "#788496"; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  }
+
+
+  function drawClashNode(ctx, d) {
+    if (CUSTOM_BG) {
+      applyPreviewBg(ctx);
+    } else {
+      ctx.fillStyle = "#0a0c12";
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
+    ctx.fillStyle = "#2c3446";
+    ctx.fillRect(0, 0, PANEL_W, 1);
+    drawPixelText(ctx, 8, 5, "CLASH NODE", "#eef2fa", 1);
+    drawClashButton(ctx, d.ocRunning);
+    drawLineH(ctx, 14, 8, PANEL_W - 8, "#3e465a");
+    if (!d.ocRunning) {
+      drawPixelText(ctx, 8, 32, "CLASH OFF", "#e74542", 1);
+      drawPixelText(ctx, 8, 48, "NO NODE DATA", "#bdcbde", 1);
+      return;
+    }
+    drawCountryFlag(ctx, 6, 19, d.ocCountry);
+    drawPixelText(ctx, 68, 19, d.ocCountry, "#ffff00", 1);
+    drawCJK(ctx, COUNTRY_ZH[d.ocCountry] || "", 68 + String(d.ocCountry || "").length * 6 + 6, 14, "#ffffff");
+    drawPixelText(ctx, 68, 31, d.ocNode || "UNKNOWN", "#ffffff", 1);
+    drawPixelText(ctx, 68, 43, "GROUP " + (d.ocGroup || "-") + (d.ocGroupCount ? " x" + d.ocGroupCount : ""), "#ffffff", 1);
+    drawPixelText(ctx, 68, 55, "TYPE " + (d.ocNodeType || "-") + " UDP " + (d.ocUdp || "NO"), "#ffffff", 1);
+    var dtext = d.ocDelay > 0 ? (d.ocDelay + "ms") : "-";
+    var dcolor = d.ocDelay > 0 ? (d.ocDelay < 150 ? "#39d36b" : (d.ocDelay < 300 ? "#f7be39" : "#e74542")) : "#8e9bb0";
+    drawPixelText(ctx, 68, 67, "DLY " + dtext, dcolor, 1);
+    drawPixelText(ctx, 150, 67, "RATE " + (d.ocRate || "1x"), "#ffff00", 1);
+    var conn = "CONN " + (d.connCount || 0);
+    drawPixelText(ctx, PANEL_W - 8 - pixelWidth(conn, 1), 67, conn, "#ffffff", 1);
+    drawLineH(ctx, 75, 8, PANEL_W - 8, "#2e3648");
+  }
+
+  function applyPreviewBg(ctx) {
+    ctx.save();
+    if (S.bgBlur > 0) ctx.filter = "blur(" + (S.bgBlur / 100 * 3.5) + "px)";
+    ctx.drawImage(CUSTOM_BG, 0, 0, PANEL_W, PANEL_H);
+    ctx.restore();
+    if (S.bgBlur > 0) {
+      ctx.fillStyle = "rgba(235,240,250," + (S.bgBlur / 100 * 0.12) + ")";
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
+    ctx.fillStyle = "rgba(0,0,0," + (S.bgMask / 100) + ")";
+    ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+  }
+
+  function drawClashButton(ctx, on) {
+    var bx = PANEL_W - 42;
+    var label = on ? "ON" : "OFF";
+    ctx.fillStyle = "#121620";
+    ctx.fillRect(bx, 1, 34, 13);
+    ctx.fillStyle = "#465268";
+    ctx.fillRect(bx, 1, 34, 1);
+    ctx.fillRect(bx, 13, 34, 1);
+    ctx.fillRect(bx, 1, 1, 13);
+    ctx.fillRect(bx + 33, 1, 1, 13);
+    drawPixelText(ctx, bx + (34 - pixelWidth(label, 1)) / 2, 5, label,
+      on ? "#39d36b" : "#e74542", 1);
+  }
+
+  function drawClashPage(ctx, d) {
+    if (d.page === "clash_info") {
+      drawClashInfo(ctx, d);
+      return;
+    }
+    if (d.page === "clash_node") {
+      drawClashNode(ctx, d);
+      return;
+    }
+    if (CUSTOM_BG) {
+      applyPreviewBg(ctx);
+    } else {
+      ctx.fillStyle = "#0a0c12";
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
+    ctx.fillStyle = "#2c3446";
+    ctx.fillRect(0, 0, PANEL_W, 1);
+    drawPixelText(ctx, 8, 5, "OPENCLASH", "#eef2fa", 1);
+    var on = d.ocRunning;
+    drawClashButton(ctx, on);
+    if (on) {
+      var mode = String(d.ocMode || "rule").toUpperCase();
+      drawPixelText(ctx, PANEL_W - 52 - pixelWidth(mode, 1), 5, mode, "#f7be39", 1);
+    }
+    drawLineH(ctx, 14, 8, PANEL_W - 8, "#3e465a");
+    if (!on) {
+      drawPixelText(ctx, 8, 30, "CLASH OFF", "#e74542", 1);
+      drawPixelText(ctx, 8, 46, "SERVICE DISABLED", "#bdcbde", 1);
+      drawLineH(ctx, 62, 8, PANEL_W - 8, "#2e3648");
+      drawNav(ctx);
+      return;
+    }
+    drawLineV(ctx, 186, 18, 70, "#2e3648");
+    drawLineH(ctx, 70, 8, PANEL_W - 8, "#2e3648");
+    var rows = [
+      ["RX", fmtSpeed(d.rx), "CPU " + d.cpu + "%"],
+      ["TX", fmtSpeed(d.tx), "MEM " + d.mem + "%"],
+      ["TOTAL", fmtBytes(d.rxTotal + d.txTotal), "OC " + d.ocMem + "MB"],
+      ["CONN", String(d.connCount), "UP " + d.ocUptime]
+    ];
+    var y = 19;
+    rows.forEach(function (row, i) {
+      drawPixelText(ctx, 8, y, row[0], "#8c98ac", 1);
+      drawPixelText(ctx, 8 + pixelWidth(row[0], 1) + 6, y, row[1],
+        i < 2 ? "#78dcff" : "#eff3ff", 1);
+      drawPixelText(ctx, 196, y, row[2],
+        i < 2 ? "#96dca0" : "#bdcbde", 1);
+      y += 12;
+    });
+    drawNav(ctx);
+  }
+
+  function drawClashInfo(ctx, d) {
+    if (CUSTOM_BG) {
+      applyPreviewBg(ctx);
+    } else {
+      ctx.fillStyle = "#0a0c12";
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
+    ctx.fillStyle = "#2c3446";
+    ctx.fillRect(0, 0, PANEL_W, 1);
+    drawPixelText(ctx, 8, 5, "CLASH INFO", "#eef2fa", 1);
+    drawClashButton(ctx, d.ocRunning);
+    drawLineH(ctx, 14, 8, PANEL_W - 8, "#3e465a");
+    if (!d.ocRunning) {
+      drawPixelText(ctx, 8, 30, "CLASH OFF", "#e74542", 1);
+      drawPixelText(ctx, 8, 46, "SERVICE DISABLED", "#bdcbde", 1);
+      drawNav(ctx);
+      return;
+    }
+    drawLineV(ctx, 166, 18, 70, "#2e3648");
+    drawLineH(ctx, 70, 8, PANEL_W - 8, "#2e3648");
+    var rows = [
+      ["DL", fmtBytes(d.rxTotal), "MEM", d.ocMem + "MB"],
+      ["UL", fmtBytes(d.txTotal), "CPU", d.cpu + "%"],
+      ["CORE", "CLASH", "UP", d.ocUptime],
+      ["CONN", String(d.connCount), "MODE", String(d.ocMode || "rule").toUpperCase()]
+    ];
+    var y = 19;
+    rows.forEach(function (row) {
+      drawPixelText(ctx, 8, y, row[0], "#8c98ac", 1);
+      drawPixelText(ctx, 8 + pixelWidth(row[0], 1) + 6, y, row[1], "#eff3ff", 1);
+      drawPixelText(ctx, 176, y, row[2], "#8c98ac", 1);
+      drawPixelText(ctx, 176 + pixelWidth(row[2], 1) + 6, y, row[3], "#f7be39", 1);
+      y += 12;
+    });
+    drawNav(ctx);
+  }
+
   function drawPreview() {
     var ctx = previewCanvas();
     if (!ctx) return;
@@ -435,6 +811,10 @@
     ctx.clearRect(0, 0, PANEL_W, PANEL_H);
     ctx.fillStyle = "#0a0c12";
     ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    if (!S.enabled) {
+      drawPanelText(ctx, "SCREEN OFF", ZH ? "已关闭 / 原厂" : "DISABLED / OEM");
+      return;
+    }
 
     if (S.mode === "dashboard") {
       drawDashboard(ctx);
@@ -442,6 +822,14 @@
     }
     if (S.mode === "custom") {
       drawCustomLayout(ctx, CUSTOM, dashData(), {});
+      return;
+    }
+    if (S.mode === "clash") {
+      var cd = dashData();
+      var livePage = (STATUS && ["clash", "clash_info", "clash_node"].indexOf(STATUS.page) >= 0)
+        ? STATUS.page : "clash";
+      cd.page = previewPageManual ? previewPage : livePage;
+      drawClashPage(ctx, cd);
       return;
     }
     if (PACK.count <= 0) {
@@ -459,7 +847,7 @@
   function drawPanelText(ctx, line1, line2) {
     ctx.fillStyle = "#0a0c12";
     ctx.fillRect(0, 0, PANEL_W, PANEL_H);
-    drawPixelText(ctx, (PANEL_W - pixelWidth(line1, 1)) / 2, 25, line1, "#c2ccdc", 1);
+    drawPixelText(ctx, (PANEL_W - pixelWidth(line1, 1)) / 2, 25, line1, "#bdcbde", 1);
     drawPixelText(ctx, (PANEL_W - pixelWidth(line2, 1)) / 2, 42, line2, "#8e9bb0", 1);
   }
 
@@ -489,6 +877,21 @@
       rx: live ? num(s.rx_kbps, 0) : 0,
       tx: live ? num(s.tx_kbps, 0) : 0,
       iface: (live && s.net_iface) || "",
+      rxTotal: live ? num(s.rx_total, 0) : 0,
+      txTotal: live ? num(s.tx_total, 0) : 0,
+      connCount: live ? num(s.conn_count, 0) : 0,
+      ocRunning: live && s.oc_running === "1",
+      ocMode: (live && s.oc_mode) || "rule",
+      ocMem: live ? num(s.oc_mem, 0) : 0,
+      ocUptime: (live && s.oc_uptime) || "0m",
+      ocGroup: (live && s.oc_group) || "",
+      ocGroupCount: live ? num(s.oc_group_count, 0) : 0,
+      ocNode: (live && s.oc_node) ? String(s.oc_node).replace(/_/g, " ").replace(new RegExp("^" + ((live && s.oc_country) || "--") + "\\s+"), "") : "",
+      ocCountry: (live && s.oc_country) || "--",
+      ocNodeType: (live && s.oc_node_type) || "",
+      ocUdp: (live && s.oc_udp) || "",
+      ocRate: (live && s.oc_rate) || "1x",
+      ocDelay: live ? num(s.oc_delay, 0) : 0,
       page: (live && s.page) || "status",
       page_count: live ? num(s.page_count, 0) : 0
     };
@@ -498,25 +901,25 @@
     return {
       bg: "#0a0c12",
       elements: [
-        { type: "text", x: 6, y: 4, size: 1, color: "#c2ccdc", text: "CPU" },
+        { type: "text", x: 6, y: 4, size: 1, color: "#bdcbde", text: "CPU" },
         { type: "bar", x: 36, y: 3, w: 150, h: 8, source: "cpu", color: "auto" },
         { type: "value", x: 192, y: 3, size: 1, color: "#eef2fa", source: "cpu", suffix: "%" },
-        { type: "text", x: 6, y: 28, size: 1, color: "#c2ccdc", text: "MEM" },
+        { type: "text", x: 6, y: 28, size: 1, color: "#bdcbde", text: "MEM" },
         { type: "bar", x: 36, y: 27, w: 150, h: 8, source: "mem", color: "auto" },
         { type: "value", x: 192, y: 27, size: 1, color: "#eef2fa", source: "mem", suffix: "%" },
-        { type: "text", x: 6, y: 52, size: 1, color: "#c2ccdc", text: "TMP" },
+        { type: "text", x: 6, y: 52, size: 1, color: "#bdcbde", text: "TMP" },
         { type: "bar", x: 36, y: 51, w: 150, h: 8, source: "temp", color: "auto" },
         { type: "value", x: 192, y: 51, size: 1, color: "#eef2fa", source: "temp", suffix: "C" },
         { type: "value", x: 232, y: 4, size: 1, color: "#eef2fa", source: "fan_rpm", suffix: " RPM" },
-        { type: "value", x: 232, y: 28, size: 1, color: "#c2ccdc", source: "clock" },
-        { type: "value", x: 232, y: 52, size: 1, color: "#c2ccdc", source: "date" }
+        { type: "value", x: 232, y: 28, size: 1, color: "#bdcbde", source: "clock" },
+        { type: "value", x: 232, y: 52, size: 1, color: "#bdcbde", source: "date" }
       ]
     };
   }
 
   function hexColor(value, fallback) {
     if (typeof value !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value)) return fallback;
-    if (value.toLowerCase() === "#78849a") return "#c2ccdc";
+    if (value.toLowerCase() === "#78849a") return "#bdcbde";
     return value;
   }
 
@@ -540,6 +943,14 @@
       case "hm": return String(d.hm || "");
       case "date": return String(d.date || "");
       case "weekday": return String(d.weekday || "");
+      case "oc_status": return d.ocRunning ? "ON" : "OFF";
+      case "oc_rx": return fmtSpeed(d.rx);
+      case "oc_tx": return fmtSpeed(d.tx);
+      case "oc_total": return fmtBytes(d.rxTotal + d.txTotal);
+      case "oc_conns": return String(d.connCount || 0);
+      case "oc_mode": return String(d.ocMode || "rule").toUpperCase();
+      case "oc_mem": return String(d.ocMem || 0) + "MB";
+      case "oc_uptime": return String(d.ocUptime || "0m");
       default: return "";
     }
   }
@@ -586,10 +997,110 @@
     return { x: x, y: el.y, w: Math.max(1, w), h: h };
   }
 
+  var bgPreviewTimer = null;
+  var bgPreviewIndex = 0;
+
+  function decodeBgFrame(buf) {
+    if (!buf || buf.byteLength !== 76 * 284 * 2) throw new Error("bad background frame");
+    var bytes = new Uint8Array(buf);
+    var cv = document.createElement("canvas");
+    cv.width = PANEL_W; cv.height = PANEL_H;
+    var cx = cv.getContext("2d");
+    var img = cx.createImageData(PANEL_W, PANEL_H);
+    for (var y = 0; y < PANEL_H; y++) {
+      for (var x = 0; x < PANEL_W; x++) {
+        var yf = 283 - x, xf = y;
+        var bi = (yf * 76 + xf) * 2;
+        var c = bytes[bi] | (bytes[bi + 1] << 8);
+        var r = (c >> 11) & 0x1F, g = (c >> 5) & 0x3F, b = c & 0x1F;
+        var o = (y * PANEL_W + x) * 4;
+        img.data[o] = (r << 3) | (r >> 2);
+        img.data[o + 1] = (g << 2) | (g >> 4);
+        img.data[o + 2] = (b << 3) | (b >> 2);
+        img.data[o + 3] = 255;
+      }
+    }
+    cx.putImageData(img, 0, 0);
+    return cv;
+  }
+
+  function loadBgHistory() {
+    if (!URLS.bgHistory) return;
+    fetch(URLS.bgHistory + "?_=" + Date.now(), { cache: "no-store", credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var box = $("glanim-bg-history"), slots = $("glanim-bg-history-slots");
+        if (!box || !slots) return;
+        var items = (data && data.slots) || [];
+        slots.innerHTML = "";
+        if (!items.length) { box.hidden = true; return; }
+        items.forEach(function (it) {
+          var item = document.createElement("div");
+          item.className = "gl-bg-history-item";
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "gl-bg-history-btn";
+          b.textContent = "#" + it.slot + " · " + it.frames + (ZH ? " 帧" : " frames");
+          b.addEventListener("click", function () {
+            if (!URLS.bgRestore) return;
+            b.disabled = true;
+            api(URLS.bgRestore, { method: "POST", body: formBody({ slot: String(it.slot) }) })
+              .then(function () { toast(ZH ? "背景已恢复" : "Background restored", "ok"); setTimeout(function () { location.reload(); }, 700); })
+              .catch(function (err) { b.disabled = false; toast(err.message || "restore failed", "error"); });
+          });
+          item.appendChild(b);
+          if (URLS.download) {
+            var a = document.createElement("a");
+            a.className = "gl-bg-history-dl";
+            a.href = URLS.download + "?type=history&slot=" + it.slot;
+            a.textContent = ZH ? "下载" : "Download";
+            item.appendChild(a);
+          }
+          slots.appendChild(item);
+        });
+        box.hidden = false;
+      })
+      .catch(function () {});
+  }
+
+  function loadCustomBgPreview() {
+    var info = CFG.customBg || {};
+    var count = num(info.frames, 0);
+    if (!URLS.bgFrame || count < 1) return;
+    if (bgPreviewTimer) { clearTimeout(bgPreviewTimer); bgPreviewTimer = null; }
+    bgPreviewIndex = 0;
+    var fps = clamp(num(info.fps, 8), 1, 15);
+    var delay = Math.max(80, Math.round(1000 / fps));
+
+    function tick() {
+      var index = bgPreviewIndex % count;
+      fetch(URLS.bgFrame + "?i=" + index + "&_=" + Date.now(), { cache: "no-store", credentials: "same-origin" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.arrayBuffer();
+        })
+        .then(function (buf) {
+          CUSTOM_BG = decodeBgFrame(buf);
+          drawCustomEditor();
+          drawPreview();
+          bgPreviewIndex = (index + 1) % count;
+          if (count > 1) bgPreviewTimer = setTimeout(tick, delay);
+        })
+        .catch(function () {
+          if (count > 1) bgPreviewTimer = setTimeout(tick, Math.max(500, delay));
+        });
+    }
+    tick();
+  }
+
   function drawCustomLayout(ctx, layout, d, opts) {
     opts = opts || {};
-    ctx.fillStyle = hexColor(layout.bg, "#0a0c12");
-    ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    if (CUSTOM_BG) {
+      applyPreviewBg(ctx);
+    } else {
+      ctx.fillStyle = hexColor(layout.bg, "#0a0c12");
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
     if (opts.grid) {
       ctx.strokeStyle = "rgba(110, 125, 255, 0.16)";
       ctx.lineWidth = 0.5;
@@ -668,23 +1179,28 @@
     } else {
       drawStatusPage(ctx, d);
     }
+    drawNav(ctx);
   }
 
   function drawClockPage(ctx, d) {
-    ctx.fillStyle = "#0a0c12";
-    ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    if (CUSTOM_BG) {
+      applyPreviewBg(ctx);
+    } else {
+      ctx.fillStyle = "#0a0c12";
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
 
-    drawPixelText(ctx, 8, 6, d.date + " " + d.weekday, "#c2ccdc", 1);
+    drawPixelText(ctx, 8, 6, d.date + " " + d.weekday, "#bdcbde", 1);
     if (S.showUptime && d.uptime) {
       var ut = "UP " + d.uptime;
-      drawPixelText(ctx, PANEL_W - 8 - pixelWidth(ut, 1), 6, ut, "#c2ccdc", 1);
+      drawPixelText(ctx, PANEL_W - 8 - pixelWidth(ut, 1), 6, ut, "#bdcbde", 1);
     }
 
     var big = 3;
     var bw = pixelWidth(d.hm, big);
     var bx = (PANEL_W - bw) / 2;
-    drawPixelText(ctx, bx, 22, d.hm, "#f4f7ff", big);
-    drawPixelText(ctx, bx + bw + 6, 34, d.sec, "#c2ccdc", 1);
+    drawPixelText(ctx, bx, 22, d.hm, "#eff3ff", big);
+    drawPixelText(ctx, bx + bw + 6, 34, d.sec, "#bdcbde", 1);
 
     if (S.showIp && d.ip) {
       drawPixelText(ctx, (PANEL_W - pixelWidth(d.ip, 1)) / 2, 60, d.ip, "#b9c4d8", 1);
@@ -692,15 +1208,15 @@
   }
 
   function barColor(pct) {
-    if (pct >= 80) return "#e64646";
-    if (pct >= 55) return "#f0be3c";
-    return "#3cd26e";
+    if (pct >= 80) return "#e74542";
+    if (pct >= 55) return "#f7be39";
+    return "#39d36b";
   }
 
   function tempColor(t) {
-    if (t >= 70) return "#e64646";
-    if (t >= 50) return "#f0be3c";
-    return "#3cd26e";
+    if (t >= 70) return "#e74542";
+    if (t >= 50) return "#f7be39";
+    return "#39d36b";
   }
 
   function drawBar(ctx, x, y, w, h, pct, color) {
@@ -712,8 +1228,12 @@
   }
 
   function drawStatusPage(ctx, d) {
-    ctx.fillStyle = "#0a0c12";
-    ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    if (CUSTOM_BG) {
+      applyPreviewBg(ctx);
+    } else {
+      ctx.fillStyle = "#0a0c12";
+      ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+    }
     drawPixelText(ctx, 8, 5, "STATUS", "#9fb0c8", 1);
     if (d.iface) {
       var iface = d.iface.toUpperCase();
@@ -728,15 +1248,15 @@
 
     var y = 18;
     rows.forEach(function (row) {
-      drawPixelText(ctx, 8, y, row.label, "#c2ccdc", 1);
+      drawPixelText(ctx, 8, y, row.label, "#bdcbde", 1);
       drawBar(ctx, 42, y, 154, 8, row.pct, row.color);
       var tw = pixelWidth(row.text, 1);
-      drawPixelText(ctx, PANEL_W - 8 - tw, y, row.text, "#f4f7ff", 1);
+      drawPixelText(ctx, PANEL_W - 8 - tw, y, row.text, "#eff3ff", 1);
       y += 16;
     });
 
     if (S.showNet) {
-      drawPixelText(ctx, 8, 62, "DL " + fmtSpeed(d.rx) + "  UL " + fmtSpeed(d.tx), "#f4f7ff", 1);
+      drawPixelText(ctx, 8, 62, "DL " + fmtSpeed(d.rx) + "  UL " + fmtSpeed(d.tx), "#eff3ff", 1);
     }
     if (S.showIp && d.ip) {
       drawPixelText(ctx, PANEL_W - 8 - pixelWidth(d.ip, 1), 62, d.ip, "#b9c4d8", 1);
@@ -818,7 +1338,7 @@
       clearTimeout(packTimer);
       packTimer = null;
     }
-    if (S.mode === "dashboard" || S.mode === "still" || S.mode === "custom") return;
+    if (S.mode === "dashboard" || S.mode === "still" || S.mode === "custom" || S.mode === "clash") return;
     var total = Math.max(0, packFrames.length);
     var loaded = packFrames.filter(function (x) { return !!x; }).length;
     if (total < 2 || loaded < 2) return;
@@ -844,7 +1364,7 @@
       packTimer = null;
     }
     packIndex = 0;
-    if (S.mode === "dashboard" || S.mode === "custom") {
+    if (S.mode === "dashboard" || S.mode === "custom" || S.mode === "clash") {
       drawPreview();
       return;
     }
@@ -861,9 +1381,16 @@
     el = $("gl-brightness"); if (el) el.value = S.brightness;
     setText("gl-brightness-val", String(S.brightness));
 
+    el = $("glanim-bg-blur"); if (el) el.value = S.bgBlur;
+    setText("glanim-bg-blur-val", String(S.bgBlur));
+    el = $("glanim-content-alpha"); if (el) el.value = S.contentAlpha;
+    setText("glanim-content-alpha-val", String(S.contentAlpha));
+    el = $("glanim-bg-mask"); if (el) el.value = S.bgMask;
+    setText("glanim-bg-mask-val", String(S.bgMask));
     el = $("gl-loop"); if (el) el.checked = S.loop;
     el = $("gl-fps"); if (el) el.value = S.fps;
     setText("gl-fps-val", S.fps === 0 ? (ZH ? "原生" : "native") : (S.fps + " fps"));
+    el = $("gl-auto-rotate"); if (el) el.checked = S.autoRotate;
     el = $("gl-dash-interval"); if (el) el.value = S.interval;
     setText("gl-dash-interval-val", S.interval + "s");
 
@@ -898,7 +1425,7 @@
     var play = $("glanim-panel-playback");
     var custom = $("glanim-panel-custom");
     if (dash) dash.style.display = S.mode === "dashboard" ? "" : "none";
-    if (play) play.style.display = (S.mode === "dashboard" || S.mode === "custom") ? "none" : "";
+    if (play) play.style.display = (S.mode === "dashboard" || S.mode === "custom" || S.mode === "clash") ? "none" : "";
     if (custom) custom.style.display = S.mode === "custom" ? "" : "none";
     if (S.mode === "custom") {
       drawCustomEditor();
@@ -910,23 +1437,38 @@
   function updatePreviewTabs() {
     var tabs = $("glanim-preview-tabs");
     if (!tabs) return;
+    var clashOn = S.mode === "clash";
     var clockOn = S.mode === "dashboard" && S.showTime;
     var statusOn = S.mode === "dashboard" && (S.showCpu || S.showMem || S.showTemp || S.showNet);
-    var show = clockOn && statusOn;
-    tabs.hidden = !show;
-    if (!show) return;
-    if (previewPage !== "clock" && previewPage !== "status") {
-      previewPage = (STATUS && STATUS.page) || "clock";
-    }
+    var valid = clashOn ? ["clash", "clash_info", "clash_node"]
+      : (S.mode === "dashboard" ? ["clock", "status"] : []);
+    var livePage = clashOn
+      ? ((STATUS && ["clash", "clash_info", "clash_node"].indexOf(STATUS.page) >= 0) ? STATUS.page : "clash")
+      : (clockOn ? "clock" : "status");
+    var active = (previewPageManual && valid.indexOf(previewPage) >= 0) ? previewPage : livePage;
+    var visible = 0;
     Array.prototype.forEach.call(tabs.querySelectorAll("button"), function (b) {
-      b.className = b.getAttribute("data-page") === previewPage ? "is-active" : "";
+      var page = b.getAttribute("data-page");
+      var show = clashOn
+        ? page.indexOf("clash") === 0
+        : (page === "clock" && clockOn) || (page === "status" && statusOn);
+      b.hidden = !show;
+      if (show) {
+        visible++;
+        b.className = page === active ? "is-active" : "";
+      }
     });
+    tabs.hidden = visible === 0;
   }
 
   function collect() {
     return {
       enabled: S.enabled ? "1" : "0",
       mode: S.mode,
+      bg_mask: String(S.bgMask),
+      bg_blur: String(S.bgBlur),
+      content_alpha: String(S.contentAlpha),
+      auto_rotate: S.autoRotate ? "1" : "0",
       fps: String(S.fps),
       loop: S.loop ? "1" : "0",
       brightness: String(S.brightness),
@@ -1018,7 +1560,8 @@
     dpy: 0,
     file: null,
     timer: null,
-    playing: false
+    playing: false,
+    sourceDuration: 0
   };
   var stage = null;
   var sctx = null;
@@ -1089,6 +1632,48 @@
     drawCanvasToPreview(fr.canvas);
   }
 
+  function mmss(ms) {
+    var total = Math.max(0, Math.round(ms / 1000));
+    var m = Math.floor(total / 60), sec = total % 60;
+    return ("0" + m).slice(-2) + ":" + ("0" + sec).slice(-2);
+  }
+
+  function bgTrimValues() {
+    var n = studio.frames.length;
+    var startEl = $("glanim-bg-start"), countEl = $("glanim-bg-count");
+    var start = clamp(num(startEl && startEl.value, 1), 1, Math.max(1, n));
+    var count = clamp(num(countEl && countEl.value, 300), 1, Math.max(1, n - start + 1));
+    if (countEl) { countEl.max = String(Math.max(1, n - start + 1)); }
+    if (startEl) { startEl.max = String(Math.max(1, n)); }
+    return { start: start, count: count };
+  }
+
+  function selectedBgFrames() {
+    var v = bgTrimValues();
+    return studio.frames.slice(v.start - 1, v.start - 1 + v.count);
+  }
+
+  function updateBgTrimInfo() {
+    var n = studio.frames.length;
+    var startEl = $("glanim-bg-start"), countEl = $("glanim-bg-count");
+    if (!startEl || !countEl) return;
+    if (!n) {
+      setText("glanim-bg-trim-info", ZH ? "选择图片后可设置背景起始帧和帧数" : "Choose media to set background start/frame count");
+      return;
+    }
+    if (num(countEl.value, 0) <= 0) countEl.value = String(Math.min(300, n));
+    var v = bgTrimValues();
+    var selected = studio.frames.slice(v.start - 1, v.start - 1 + v.count);
+    var ms = 0;
+    selected.forEach(function (f) { ms += num(f.delay, 100); });
+    var sourceMs = studio.sourceDuration > 0 ? studio.sourceDuration * 1000 : 0;
+    if (!sourceMs) studio.frames.forEach(function (f) { sourceMs += num(f.delay, 100); });
+    setText("glanim-bg-trim-info",
+      (ZH ? "第 " : "Frames ") + v.start + "–" + (v.start + v.count - 1)
+      + (ZH ? " 帧 · 约 " : " · about ") + mmss(ms)
+      + (ZH ? " / 原片 " : " / source ") + mmss(sourceMs));
+  }
+
   function updateStudioUI() {
     var n = studio.frames.length;
     var info = $("glanim-frame-info");
@@ -1118,6 +1703,7 @@
     var name = $("glanim-file-name");
     if (name) name.textContent = studio.file ? studio.file.name : "";
     placeStudio();
+    updateBgTrimInfo();
   }
 
   function stopStudioPlay() {
@@ -1161,6 +1747,7 @@
     studio.cur = 0;
     stopStudioPlay();
     resetTransform();
+    studio.sourceDuration = 0;
     setMsg("");
     updateStudioUI();
 
@@ -1177,6 +1764,9 @@
         var decoded = decodeGIF(buffer);
         studio.frames = decoded.frames;
         studio.cur = 0;
+        var gifMs = 0;
+        decoded.frames.forEach(function (f) { gifMs += num(f.delay, 100); });
+        studio.sourceDuration = gifMs / 1000;
         if (decoded.limited) {
           setMsg((ZH ? "GIF 共 " : "GIF has ") + decoded.total
             + (ZH ? " 帧，已保留前 " : " frames; kept the first ")
@@ -1205,6 +1795,7 @@
       URL.revokeObjectURL(url);
       studio.frames = [{ canvas: cv, delay: 500 }];
       studio.cur = 0;
+      studio.sourceDuration = 0.5;
       updateStudioUI();
     };
     img.onerror = function () {
@@ -1235,6 +1826,7 @@
 
     video.onloadedmetadata = function () {
       var duration = Number(video.duration);
+      studio.sourceDuration = duration;
       if (!isFinite(duration) || duration <= 0) {
         fail(ZH ? "无法读取视频时长" : "Cannot read video duration");
         return;
@@ -1381,6 +1973,8 @@
     if (btn) btn.disabled = true;
     setMsg(ZH ? "正在编码并上传…" : "Encoding and uploading…");
     try {
+      var frames = target === "bg" ? selectedBgFrames() : studio.frames;
+      var trim = target === "bg" ? bgTrimValues() : null;
       var manifest = {
         source: studio.file ? studio.file.name : "browser upload",
         orientation: "fb90m",
@@ -1388,7 +1982,8 @@
       };
       var fd = new FormData();
       fd.append("token", token());
-      studio.frames.forEach(function (fr, i) {
+      if (trim) { fd.append("bg_start", String(trim.start)); fd.append("bg_count", String(trim.count)); }
+      frames.forEach(function (fr, i) {
         var buffer = encodeFrame(fr.canvas);
         manifest.frames.push({
           file: "frame_" + ("000" + (i + 1)).slice(-4) + ".rgb565",
@@ -1736,36 +2331,36 @@
       clock: {
         bg: "#0a0c12",
         elements: [
-          { type: "text", x: 8, y: 4, size: 1, color: "#c2ccdc", text: "TIME" },
+          { type: "text", x: 8, y: 4, size: 1, color: "#bdcbde", text: "TIME" },
           { type: "value", x: 142, y: 14, size: 3, align: "center", color: "#eef2fa", source: "clock" },
-          { type: "value", x: 8, y: 62, size: 1, color: "#c2ccdc", source: "date" },
-          { type: "value", x: 58, y: 62, size: 1, color: "#c2ccdc", source: "weekday" },
+          { type: "value", x: 8, y: 62, size: 1, color: "#bdcbde", source: "date" },
+          { type: "value", x: 58, y: 62, size: 1, color: "#bdcbde", source: "weekday" },
           { type: "value", x: 276, y: 62, size: 1, align: "right", color: "#eef2fa", source: "net" }
         ]
       },
       fan: {
         bg: "#0a0c12",
         elements: [
-          { type: "text", x: 8, y: 4, size: 1, color: "#c2ccdc", text: "FAN" },
+          { type: "text", x: 8, y: 4, size: 1, color: "#bdcbde", text: "FAN" },
           { type: "value", x: 8, y: 16, size: 3, color: "#eef2fa", source: "fan_rpm" },
-          { type: "text", x: 118, y: 30, size: 1, color: "#c2ccdc", text: "RPM" },
-          { type: "text", x: 8, y: 50, size: 1, color: "#c2ccdc", text: "PWM" },
+          { type: "text", x: 118, y: 30, size: 1, color: "#bdcbde", text: "RPM" },
+          { type: "text", x: 8, y: 50, size: 1, color: "#bdcbde", text: "PWM" },
           { type: "bar", x: 44, y: 49, w: 130, h: 8, source: "fan_pwm", color: "auto" },
           { type: "value", x: 184, y: 49, size: 1, color: "#eef2fa", source: "fan_pwm", suffix: "%" },
-          { type: "value", x: 224, y: 8, size: 2, color: "#f0be3c", source: "temp", suffix: "C" },
-          { type: "value", x: 224, y: 32, size: 1, color: "#c2ccdc", source: "hostname" }
+          { type: "value", x: 224, y: 8, size: 2, color: "#f7be39", source: "temp", suffix: "C" },
+          { type: "value", x: 224, y: 32, size: 1, color: "#bdcbde", source: "hostname" }
         ]
       },
       minimal: {
         bg: "#0a0c12",
         elements: [
-          { type: "value", x: 8, y: 4, size: 1, color: "#c2ccdc", source: "hostname" },
+          { type: "value", x: 8, y: 4, size: 1, color: "#bdcbde", source: "hostname" },
           { type: "value", x: 8, y: 18, size: 2, color: "#eef2fa", source: "clock" },
-          { type: "text", x: 8, y: 44, size: 1, color: "#c2ccdc", text: "CPU" },
+          { type: "text", x: 8, y: 44, size: 1, color: "#bdcbde", text: "CPU" },
           { type: "value", x: 40, y: 44, size: 1, color: "#eef2fa", source: "cpu", suffix: "%" },
-          { type: "text", x: 92, y: 44, size: 1, color: "#c2ccdc", text: "MEM" },
+          { type: "text", x: 92, y: 44, size: 1, color: "#bdcbde", text: "MEM" },
           { type: "value", x: 126, y: 44, size: 1, color: "#eef2fa", source: "mem", suffix: "%" },
-          { type: "text", x: 180, y: 44, size: 1, color: "#c2ccdc", text: "TMP" },
+          { type: "text", x: 180, y: 44, size: 1, color: "#bdcbde", text: "TMP" },
           { type: "value", x: 212, y: 44, size: 1, color: "#eef2fa", source: "temp", suffix: "C" }
         ]
       },
@@ -2067,12 +2662,19 @@
     el.addEventListener("change", function () {
       S[key] = el.checked;
       setDirty(true);
+      if (key === "autoRotate" && el.checked) {
+        previewPageManual = false;
+        previewPage = null;
+        updatePreviewTabs();
+        drawPreview();
+      }
       if (key === "loop") startPackTimer();
       if (key.indexOf("show") === 0) {
         updatePreviewTabs();
         drawPreview();
       }
       if (key === "enabled") {
+        drawPreview();
         // only affects service state on save
       }
     });
@@ -2088,6 +2690,7 @@
         if (!mode || mode === S.mode) return;
         S.mode = mode;
         previewPage = null;
+        previewPageManual = false;
         syncPanels();
         Array.prototype.forEach.call(modeGrid.querySelectorAll(".gl-mode"), function (c) {
           var active = c.getAttribute("data-mode") === mode;
@@ -2101,6 +2704,7 @@
     }
 
     bindToggle("gl-enabled", "enabled");
+    bindToggle("gl-auto-rotate", "autoRotate");
     bindToggle("gl-loop", "loop");
     bindToggle("gl-show-time", "showTime");
     bindToggle("gl-show-cpu", "showCpu");
@@ -2118,7 +2722,61 @@
     if (bright) bright.addEventListener("input", function () {
       S.brightness = num(bright.value, 4);
       setText("gl-brightness-val", String(S.brightness));
-      setDirty(true);
+      if (URLS.brightness) {
+        if (brightTimer) clearTimeout(brightTimer);
+        brightTimer = setTimeout(function () {
+          api(URLS.brightness, { method: "POST", body: formBody({ value: String(S.brightness) }) })
+            .then(function () {
+              if (!dirty) setText("glanim-save-text", ZH ? "已自动保存" : "Auto-saved");
+            })
+            .catch(function () { /* saved on Apply as fallback */ });
+        }, 100);
+      }
+    });
+
+    var bgBlur = $("glanim-bg-blur");
+    if (bgBlur) bgBlur.addEventListener("input", function () {
+      S.bgBlur = num(bgBlur.value, 0);
+      setText("glanim-bg-blur-val", String(S.bgBlur));
+      drawPreview();
+      drawCustomEditor();
+      if (URLS.blur) {
+        api(URLS.blur, { method: "POST", body: formBody({ value: String(S.bgBlur) }) })
+          .then(function () {
+            if (!dirty) setText("glanim-save-text", ZH ? "已自动保存" : "Auto-saved");
+          })
+          .catch(function () { /* preview still follows */ });
+      }
+    });
+
+    var contentAlpha = $("glanim-content-alpha");
+    if (contentAlpha) contentAlpha.addEventListener("input", function () {
+      S.contentAlpha = num(contentAlpha.value, 100);
+      setText("glanim-content-alpha-val", String(S.contentAlpha));
+      drawPreview();
+      if (URLS.contentAlpha) {
+        api(URLS.contentAlpha, { method: "POST", body: formBody({ value: String(S.contentAlpha) }) })
+          .then(function () { if (!dirty) setText("glanim-save-text", ZH ? "已自动保存" : "Auto-saved"); })
+          .catch(function () {});
+      }
+    });
+
+    var bgMask = $("glanim-bg-mask");
+    if (bgMask) bgMask.addEventListener("input", function () {
+      S.bgMask = num(bgMask.value, 45);
+      setText("glanim-bg-mask-val", String(S.bgMask));
+      drawPreview();
+      drawCustomEditor();
+      if (URLS.mask) {
+        if (maskTimer) clearTimeout(maskTimer);
+        maskTimer = setTimeout(function () {
+          api(URLS.mask, { method: "POST", body: formBody({ mask: String(S.bgMask) }) })
+            .then(function () {
+              if (!dirty) setText("glanim-save-text", ZH ? "已自动保存" : "Auto-saved");
+            })
+            .catch(function () { /* preview still follows */ });
+        }, 120);
+      }
     });
 
     var fps = $("gl-fps");
@@ -2169,8 +2827,19 @@
       var b = ev.target.closest ? ev.target.closest("button") : null;
       if (!b) return;
       previewPage = b.getAttribute("data-page");
+      previewPageManual = true;
+      S.autoRotate = false;
+      var autoEl = $("gl-auto-rotate");
+      if (autoEl) autoEl.checked = false;
       updatePreviewTabs();
       drawPreview();
+      if (URLS.page) {
+        api(URLS.page, { method: "POST", body: formBody({ page: previewPage }) })
+          .then(function () {
+            if (!dirty) setText("glanim-save-text", ZH ? "已自动保存" : "Auto-saved");
+          })
+          .catch(function () {});
+      }
     });
   }
 
@@ -2243,6 +2912,11 @@
       placeStudio();
     });
 
+    var bgStart = $("glanim-bg-start");
+    var bgCount = $("glanim-bg-count");
+    if (bgStart) bgStart.addEventListener("input", updateBgTrimInfo);
+    if (bgCount) bgCount.addEventListener("input", updateBgTrimInfo);
+
     var reset = $("glanim-reset");
     if (reset) reset.addEventListener("click", function () {
       resetTransform();
@@ -2264,8 +2938,17 @@
 
     var apply = $("glanim-apply");
     if (apply) apply.addEventListener("click", function () { applyImage("screen"); });
+    var packDl = $("glanim-pack-download");
+    if (packDl) {
+      packDl.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        if (URLS.download) window.location.href = URLS.download + "?type=frames&_=" + Date.now();
+      });
+    }
     var applyBg = $("glanim-apply-bg");
     if (applyBg) applyBg.addEventListener("click", applyBackground);
+    var bgDl = $("glanim-bg-download");
+    if (bgDl) bgDl.addEventListener("click", function (ev) { ev.preventDefault(); if (URLS.download) window.location.href = URLS.download + "?type=bg&_=" + Date.now(); });
     var clearBg = $("glanim-clear-bg");
     if (clearBg) clearBg.addEventListener("click", clearBackground);
 
@@ -2373,6 +3056,8 @@
     bindStudio();
     bindPack();
     bindCustomEditor();
+    loadBgHistory();
+    loadCustomBgPreview();
     syncForm();
     setDirty(false);
     updateStudioUI();

@@ -2,6 +2,8 @@
 
 [中文](README.zh-CN.md) · [English](README.en.md) · [Back to overview](../../README.md)
 
+Author: **@xavierbe278** · GitHub: [gl-be3600-toolbox](https://github.com/xavierbe278/gl-be3600-toolbox)
+
 > **Open source / research & study project**  
 > This is a community project, not an official GL.iNet firmware or plugin. Flashing, rooting and modifying the OEM admin panel can damage your device. Back up first and use at your own risk. Follow local laws and the GL.iNet / OpenWrt / LuCI licenses.
 
@@ -9,15 +11,13 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glfanctl` **1.0.4-1** — PWM fan control for GL-BE3600 with OEM PID, temperature curve, fixed PWM and stop modes; live curves, five temperature zones and independent save.
+`luci-app-glfanctl` **1.0.7-1** — PWM fan control for GL-BE3600 with OEM PID, temperature curve, fixed PWM and stop modes; live curves, five temperature zones and independent save.
 
 ---
 
 ## Screenshots
 
-![Fan control](images/fan-control.png)
-
-![Fan control inside gl-ui](images/glui-fan.png)
+![Fan Control plugin page](images/fan-page.png)
 
 ---
 
@@ -51,11 +51,11 @@ Other firmware versions may need adjustments.
 ## Install
 
 ```sh
-scp releases/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -106,7 +106,7 @@ The square expand button in the Overview CPU card is provided by **`luci-app-gla
 To use the OEM entry, install both:
 
 - `luci-app-glanim 1.3.3-1`
-- `luci-app-glfanctl 1.0.4-1`
+- `luci-app-glfanctl 1.0.7-1`
 
 ---
 
@@ -118,7 +118,7 @@ From the repository root:
 python build/build_ipk.py fan-control
 ```
 
-Output: `plugins/fan-control/releases/luci-app-glfanctl_1.0.4-1_....ipk`
+Output: `plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_....ipk`
 
 Layout:
 

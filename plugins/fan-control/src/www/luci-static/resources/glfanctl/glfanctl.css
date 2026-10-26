@@ -254,7 +254,13 @@ body[data-page="admin-services-glanim-main"] .cbi-map > h2 {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+.gl-page .gl-grid > .gl-card {
+  min-width: 0;
+}
+.gl-page .gl-grid + .gl-card {
+  margin-top: 16px;
 }
 .gl-page .gl-card {
   border: 1px solid var(--gl-border);
@@ -1883,4 +1889,30 @@ body[data-page="admin-services-glfanctl-main"] .cbi-map > h2 {
   border-radius: 999px;
   background: linear-gradient(90deg, #2dce89, #f0be3c 60%, #f5365c);
   transition: width 0.25s ease;
+}
+
+/* Author / project footer */
+.gl-page .gl-author {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 18px 0 6px;
+  color: var(--gl-muted);
+  font-size: 12px;
+}
+.gl-page .gl-author strong {
+  color: var(--gl-text);
+  font-weight: 600;
+}
+.gl-page .gl-author span {
+  color: var(--gl-faint);
+}
+.gl-page .gl-author a {
+  color: var(--gl-primary);
+  text-decoration: none;
+}
+.gl-page .gl-author a:hover {
+  text-decoration: underline;
 }

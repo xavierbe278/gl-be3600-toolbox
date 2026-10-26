@@ -5,6 +5,8 @@ local fs = require "nixio.fs"
 
 local FRAMES_DEFAULT = "/usr/share/glanim/frames"
 local CUSTOM_BG_DIR = "/usr/share/glanim/custom_bg"
+local BG_HISTORY_DIR = "/usr/share/glanim/bg_history"
+local MAX_BG_FRAMES = 300
 local TMP_PACK = "/tmp/glanim-pack.tar.gz"
 local TMP_IMAGE_DIR = "/tmp/glanim-frame-upload"
 local FRAME_BYTES = 76 * 284 * 2
@@ -13,7 +15,7 @@ local MAX_FRAMES = 600
 local MAX_FRAME_MS = 1000
 local MIN_FRAME_MS = 30
 
-local MODES = { gif = true, still = true, slideshow = true, dashboard = true, custom = true }
+local MODES = { gif = true, still = true, slideshow = true, dashboard = true, custom = true, clash = true }
 local TOUCH_ACTIONS = { next = true, wake = true, none = true }
 
 local function uci_cursor()
@@ -204,6 +206,16 @@ function index()
 	entry({"admin", "services", "glanim", "apply"}, call("action_apply")).leaf = true
 	entry({"admin", "services", "glanim", "save"}, call("action_save")).leaf = true
 	entry({"admin", "services", "glanim", "frame"}, call("action_frame")).leaf = true
+	entry({"admin", "services", "glanim", "bg_frame"}, call("action_bg_frame")).leaf = true
+	entry({"admin", "services", "glanim", "mask"}, call("action_mask")).leaf = true
+	entry({"admin", "services", "glanim", "brightness"}, call("action_brightness")).leaf = true
+	entry({"admin", "services", "glanim", "blur"}, call("action_blur")).leaf = true
+	entry({"admin", "services", "glanim", "content_alpha"}, call("action_content_alpha")).leaf = true
+	entry({"admin", "services", "glanim", "page"}, call("action_page")).leaf = true
+	entry({"admin", "services", "glanim", "bg_history"}, call("action_bg_history")).leaf = true
+	entry({"admin", "services", "glanim", "bg_restore"}, call("action_bg_restore")).leaf = true
+	entry({"admin", "services", "glanim", "download"}, call("action_download")).leaf = true
+	entry({"admin", "services", "glanim", "openclash"}, call("action_openclash")).leaf = true
 	entry({"admin", "services", "glanim", "fetch_url"}, call("action_fetch_url")).leaf = true
 	entry({"admin", "services", "glanim", "upload"}, call("action_upload")).leaf = true
 	entry({"admin", "services", "glanim", "upload_image"}, call("action_upload_image")).leaf = true
@@ -211,6 +223,24 @@ function index()
 	entry({"admin", "services", "glanim", "clear_bg"}, call("action_clear_bg")).leaf = true
 	entry({"admin", "services", "glanim", "restore_oem"}, call("action_restore_oem")).leaf = true
 	entry({"admin", "services", "glanim", "set_lang"}, call("action_set_lang")).leaf = true
+end
+
+function action_openclash()
+	local sys = require "luci.sys"
+	local fs = require "nixio.fs"
+	if not fs.access("/etc/init.d/openclash") then
+		return json_reply({ ok = false, error = "not_installed" }, 400)
+	end
+	local enable = luci.http.formvalue("enable") == "1"
+	local uci = uci_cursor()
+	uci:set("openclash", "config", "enable", enable and "1" or "0")
+	uci:commit("openclash")
+	local act = enable and "start" or "stop"
+	sys.call("(/etc/init.d/openclash " .. act .. " >/tmp/glanim-openclash.log 2>&1 &)")
+	if is_xhr() then
+		return json_reply({ ok = true, enable = enable and "1" or "0" })
+	end
+	redirect_msg(enable and "openclash_enabled" or "openclash_disabled")
 end
 
 function action_set_lang()
@@ -259,6 +289,21 @@ function action_status()
 		lan_ip        = st("lan_ip"),
 		wan_ip        = st("wan_ip"),
 		hostname      = st("hostname"),
+		rx_total      = st("rx_total"),
+		tx_total      = st("tx_total"),
+		conn_count    = st("conn_count"),
+		oc_running    = st("oc_running"),
+		oc_mode       = st("oc_mode"),
+		oc_mem        = st("oc_mem"),
+		oc_uptime     = st("oc_uptime"),
+		oc_group      = st("oc_group"),
+		oc_group_count = st("oc_group_count"),
+		oc_node       = st("oc_node"),
+		oc_country    = st("oc_country"),
+		oc_node_type  = st("oc_node_type"),
+		oc_udp        = st("oc_udp"),
+		oc_rate       = st("oc_rate"),
+		oc_delay      = st("oc_delay"),
 		fan_rpm       = st("fan_rpm"),
 		fan_pwm       = st("fan_pwm"),
 		clock         = st("clock"),
@@ -278,6 +323,106 @@ end
 
 function action_frame()
 	local dir = frames_dir()
+	local m = read_manifest(dir)
+	local idx = tonumber(luci.http.formvalue("i")) or 0
+	if not m or type(m.frames) ~= "table" or not m.frames[idx + 1] then
+		luci.http.status(404, "Not Found")
+		return
+	end
+	local name = m.frames[idx + 1].file
+	if not safe_name(name) then
+		luci.http.status(404, "Not Found")
+		return
+	end
+	local f = io.open(dir .. "/" .. name, "rb")
+	if not f then
+		luci.http.status(404, "Not Found")
+		return
+	end
+	local data = f:read("*a")
+	f:close()
+	if not data or #data ~= FRAME_BYTES then
+		luci.http.status(404, "Not Found")
+		return
+	end
+	luci.http.prepare_content("application/octet-stream")
+	luci.http.header("Cache-Control", "no-store")
+	luci.http.write(data)
+end
+
+function action_page()
+	local page = luci.http.formvalue("page") or ""
+	local allowed = {
+		clock = true, status = true, clash = true,
+		clash_info = true, clash_node = true,
+	}
+	if not allowed[page] then
+		return json_reply({ ok = false, error = "bad_page" }, 400)
+	end
+	local f = io.open("/tmp/glanim.page", "w")
+	if f then f:write(page); f:close() end
+	local af = io.open("/tmp/glanim.auto", "w")
+	if af then af:write("0"); af:close() end
+	local uci = require("luci.model.uci").cursor()
+	uci:set("glanim", "globals", "auto_rotate", "0")
+	uci:commit("glanim")
+	return json_reply({ ok = true, page = page, auto_rotate = "0" })
+end
+
+
+function action_blur()
+	local value = tonumber(luci.http.formvalue("value") or "0") or 0
+	if value < 0 then value = 0 end
+	if value > 100 then value = 100 end
+	local uci = require("luci.model.uci").cursor()
+	uci:set("glanim", "globals", "bg_blur", tostring(value))
+	uci:commit("glanim")
+	local f = io.open("/tmp/glanim.blur", "w")
+	if f then f:write(tostring(value)); f:close() end
+	return json_reply({ ok = true, value = value })
+end
+
+
+function action_content_alpha()
+	local value = tonumber(luci.http.formvalue("value") or "100") or 100
+	value = math.max(0, math.min(100, value))
+	local uci = require("luci.model.uci").cursor()
+	uci:set("glanim", "globals", "content_alpha", tostring(value))
+	uci:commit("glanim")
+	local f = io.open("/tmp/glanim.content_alpha", "w")
+	if f then f:write(tostring(value)); f:close() end
+	return json_reply({ ok = true, value = value })
+end
+
+
+function action_brightness()
+	local value = tonumber(luci.http.formvalue("value") or "4") or 4
+	if value < 0 then value = 0 end
+	if value > 11 then value = 11 end
+	local uci = require("luci.model.uci").cursor()
+	uci:set("glanim", "globals", "brightness", tostring(value))
+	uci:commit("glanim")
+	local f = io.open("/tmp/glanim.brightness", "w")
+	if f then f:write(tostring(value)); f:close() end
+	return json_reply({ ok = true, value = value })
+end
+
+
+function action_mask()
+	local mask = tonumber(luci.http.formvalue("mask") or "45") or 45
+	if mask < 0 then mask = 0 end
+	if mask > 100 then mask = 100 end
+	local uci = require("luci.model.uci").cursor()
+	uci:set("glanim", "globals", "bg_mask", tostring(mask))
+	uci:commit("glanim")
+	local f = io.open("/tmp/glanim.mask", "w")
+	if f then f:write(tostring(mask)); f:close() end
+	return json_reply({ ok = true, mask = mask })
+end
+
+
+function action_bg_frame()
+	local dir = CUSTOM_BG_DIR
 	local m = read_manifest(dir)
 	local idx = tonumber(luci.http.formvalue("i")) or 0
 	if not m or type(m.frames) ~= "table" or not m.frames[idx + 1] then
@@ -376,6 +521,8 @@ local CUSTOM_SOURCES = {
 	iface = true, ip = true, lan_ip = true, wan_ip = true, hostname = true,
 	uptime = true, clock = true, hm = true, date = true, weekday = true,
 	fan_rpm = true, fan_pwm = true,
+	oc_status = true, oc_rx = true, oc_tx = true, oc_total = true,
+	oc_conns = true, oc_mode = true, oc_mem = true, oc_uptime = true,
 }
 
 local function sanitize_layout(l)
@@ -449,6 +596,10 @@ function action_save()
 	local fps = numv("fps", 0, 0, 30)
 	local brightness = numv("brightness", 4, 0, 11)
 	local dash_interval = numv("dash_interval", 5, 2, 30)
+	local auto_rotate = boolv("auto_rotate", true)
+	local bg_mask = numv("bg_mask", 20, 0, 100)
+	local bg_blur = numv("bg_blur", 0, 0, 100)
+	local content_alpha = numv("content_alpha", 100, 0, 100)
 
 	local dir = safe_dir(luci.http.formvalue("frames_dir") or "")
 	if not dir then return fail_reply("bad_dir", 400) end
@@ -473,6 +624,8 @@ function action_save()
 			end
 		elseif mode == "custom" then
 			if not custom_layout then return fail_reply("no_custom", 400) end
+		elseif mode == "clash" then
+			-- OpenClash page is generated from live status; no frame pack needed.
 		else
 			local m = read_manifest(dir)
 			local ok = m and validate_manifest(m, dir, true)
@@ -485,6 +638,8 @@ function action_save()
 	uci:set("glanim", "globals", "fps", tostring(fps))
 	uci:set("glanim", "globals", "loop", loop)
 	uci:set("glanim", "globals", "brightness", tostring(brightness))
+	local bf = io.open("/tmp/glanim.brightness", "w")
+	if bf then bf:write(tostring(brightness)); bf:close() end
 	uci:set("glanim", "globals", "keep_original", keep_original)
 	uci:set("glanim", "globals", "frames_dir", dir)
 	uci:set("glanim", "globals", "show_time", show_time)
@@ -495,6 +650,21 @@ function action_save()
 	uci:set("glanim", "globals", "show_uptime", show_uptime)
 	uci:set("glanim", "globals", "show_ip", show_ip)
 	uci:set("glanim", "globals", "dash_interval", tostring(dash_interval))
+	uci:set("glanim", "globals", "auto_rotate", auto_rotate)
+	local af = io.open("/tmp/glanim.auto", "w")
+	if af then af:write(auto_rotate); af:close() end
+	if auto_rotate == "1" then
+		os.remove("/tmp/glanim.page")
+	end
+	uci:set("glanim", "globals", "bg_mask", tostring(bg_mask))
+	uci:set("glanim", "globals", "bg_blur", tostring(bg_blur))
+	uci:set("glanim", "globals", "content_alpha", tostring(content_alpha))
+	local mf = io.open("/tmp/glanim.mask", "w")
+	if mf then mf:write(tostring(bg_mask)); mf:close() end
+	local blf = io.open("/tmp/glanim.blur", "w")
+	if blf then blf:write(tostring(bg_blur)); blf:close() end
+	local alf = io.open("/tmp/glanim.content_alpha", "w")
+	if alf then alf:write(tostring(content_alpha)); alf:close() end
 	uci:set("glanim", "globals", "touch_enable", touch_enable)
 	uci:set("glanim", "globals", "touch_action", touch_action)
 	uci:set("glanim", "globals", "touch_swap_xy", touch_swap_xy)
@@ -683,6 +853,11 @@ function action_upload_image()
 	if not ok or type(m) ~= "table" then return finish("manifest", false) end
 	if type(m.frames) ~= "table" or #m.frames < 1 then return finish("manifest", false) end
 	if #m.frames > MAX_FRAMES then return finish("toomany", false) end
+	if is_bg and #m.frames > MAX_BG_FRAMES then
+		local kept = {}
+		for i = 1, MAX_BG_FRAMES do kept[i] = m.frames[i] end
+		m.frames = kept
+	end
 
 	local seen = {}
 	for i = 1, #m.frames do
@@ -722,6 +897,12 @@ function action_upload_image()
 	if not swapped then return finish("install", false) end
 
 	if is_bg then
+		-- Keep the last three uploaded backgrounds as selectable presets.
+		sys.call("mkdir -p " .. BG_HISTORY_DIR)
+		sys.call("rm -rf " .. BG_HISTORY_DIR .. "/3")
+		sys.call("mv " .. BG_HISTORY_DIR .. "/2 " .. BG_HISTORY_DIR .. "/3 2>/dev/null")
+		sys.call("mv " .. BG_HISTORY_DIR .. "/1 " .. BG_HISTORY_DIR .. "/2 2>/dev/null")
+		sys.call("cp -a " .. dir .. " " .. BG_HISTORY_DIR .. "/1")
 		local fps = tonumber(luci.http.formvalue("fps")) or 8
 		fps = math.max(1, math.min(15, math.floor(fps)))
 		uci:set("glanim", "globals", "custom_bg_dir", dir)
@@ -740,6 +921,99 @@ function action_upload_image()
 
 	return finish("installed:" .. tostring(#m.frames), true)
 end
+
+function action_download()
+	local sys = require "luci.sys"
+	local fs = require "nixio.fs"
+	local kind = luci.http.formvalue("type") or "frames"
+	local dir, name
+	if kind == "frames" then
+		dir = frames_dir()
+		name = "glanim-frames.tar.gz"
+	elseif kind == "bg" then
+		dir = CUSTOM_BG_DIR
+		name = "glanim-background.tar.gz"
+	elseif kind == "history" then
+		local slot = tonumber(luci.http.formvalue("slot")) or 0
+		if slot < 1 or slot > 3 then
+			luci.http.status(400, "Bad Request")
+			return
+		end
+		dir = BG_HISTORY_DIR .. "/" .. slot
+		name = "glanim-background-" .. slot .. ".tar.gz"
+	else
+		luci.http.status(400, "Bad Request")
+		return
+	end
+	local m = read_manifest(dir)
+	if not m or type(m.frames) ~= "table" or #m.frames < 1 then
+		luci.http.status(404, "Not Found")
+		return
+	end
+	local tmp = "/tmp/glanim-download.tar.gz"
+	sys.call("rm -f " .. tmp)
+	if sys.call("tar -czf " .. tmp .. " -C " .. dir .. " . 2>/dev/null") ~= 0 or not fs.access(tmp) then
+		luci.http.status(500, "Internal Server Error")
+		return
+	end
+	luci.http.header("Content-Disposition", 'attachment; filename="' .. name .. '"')
+	luci.http.header("Cache-Control", "no-store")
+	luci.http.prepare_content("application/gzip")
+	local f = io.open(tmp, "rb")
+	if not f then
+		luci.http.status(500, "Internal Server Error")
+		return
+	end
+	while true do
+		local chunk = f:read(65536)
+		if not chunk then break end
+		luci.http.write(chunk)
+	end
+	f:close()
+	os.remove(tmp)
+end
+
+function action_bg_history()
+	local slots = {}
+	for i = 1, 3 do
+		local m = read_manifest(BG_HISTORY_DIR .. "/" .. i)
+		if m and type(m.frames) == "table" and #m.frames > 0 then
+			slots[#slots + 1] = {
+				slot = i,
+				frames = #m.frames,
+				source = type(m.source) == "string" and m.source or "",
+			}
+		end
+	end
+	return json_reply({ ok = true, slots = slots })
+end
+
+function action_bg_restore()
+	local sys = require "luci.sys"
+	local slot = tonumber(luci.http.formvalue("slot")) or 0
+	if slot < 1 or slot > 3 then
+		return json_reply({ ok = false, error = "bad_slot" }, 400)
+	end
+	local src = BG_HISTORY_DIR .. "/" .. slot
+	local m = read_manifest(src)
+	if not m or type(m.frames) ~= "table" or #m.frames < 1 then
+		return json_reply({ ok = false, error = "empty" }, 404)
+	end
+	sys.call("rm -rf " .. CUSTOM_BG_DIR .. " " .. CUSTOM_BG_DIR .. ".new")
+	if sys.call("cp -a " .. src .. " " .. CUSTOM_BG_DIR) ~= 0 then
+		return json_reply({ ok = false, error = "copy" }, 500)
+	end
+	local uci = uci_cursor()
+	uci:set("glanim", "globals", "custom_bg_dir", CUSTOM_BG_DIR)
+	uci:set("glanim", "globals", "custom_bg_frames", tostring(#m.frames))
+	uci:set("glanim", "globals", "custom_bg_fps", tostring(math.max(1, math.min(15, tonumber(m.fps) or 8))))
+	uci:commit("glanim")
+	if cfg_str("enabled", "0") == "1" then
+		sys.call("/etc/init.d/glanim restart >/dev/null 2>&1")
+	end
+	return json_reply({ ok = true, slot = slot, frames = #m.frames })
+end
+
 
 function action_clear_bg()
 	local sys = require "luci.sys"

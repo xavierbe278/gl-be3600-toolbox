@@ -3,7 +3,7 @@ local sys = require "luci.sys"
 local util = require "luci.util"
 local json = require "luci.jsonc"
 
-local VERSION = "1.0.4"
+local VERSION = "1.0.7"
 
 local function h(value)
 	return util.pcdata(tostring(value or ""))
@@ -128,7 +128,7 @@ add('<div class="gl-page fan-page" id="glfanctl-page">')
 
 -- hero
 add('<div class="gl-hero"><div class="gl-hero-main"><div class="gl-hero-icon">' .. icon("fan") .. '</div>'
-	.. '<div class="gl-hero-text"><div class="gl-kicker">GL-BE3600 <span></span> PWM FAN</div>'
+	.. '<div class="gl-hero-text"><div class="gl-kicker">GL-BE3600 <span></span> PWM FAN <span></span> v' .. VERSION .. '</div>'
 	.. '<h1>' .. h(translate("Fan Control")) .. '</h1>'
 	.. '<p>' .. h(translate("Custom fan policy for GL-BE3600. Auto keeps the OEM PID; curve and manual drive the PWM from this daemon; disabling hands the fan back to gl_fan.")) .. '</p>'
 	.. '</div></div><div class="gl-hero-side">'
@@ -218,6 +218,7 @@ add('<div class="gl-savebar" id="fan-savebar"><div class="gl-save-state"><span c
 	.. '<button type="button" class="gl-btn primary" id="fan-save">' .. icon("save") .. h(translate("Save & Apply")) .. '</button>'
 	.. '</div></div>')
 add('<div class="gl-toast" id="fan-toast" role="status" aria-live="polite"></div>')
+add('<footer class="gl-author">' .. h(translate("Author")) .. ' <strong>@xavierbe278</strong><span>·</span><a href="https://github.com/xavierbe278/gl-be3600-toolbox" target="_blank" rel="noopener">' .. h(translate("GitHub project")) .. '</a><span>·</span>v' .. VERSION .. '</footer>')
 add('</div>')
 
 local cfg_json = {

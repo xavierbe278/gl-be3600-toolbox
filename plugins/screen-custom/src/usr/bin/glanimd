@@ -68,6 +68,7 @@ def load_config():
         "rotate": int(uci_get("rotate", "0") or 0),
         "flip": uci_get("flip", "0") == "1",
         "brightness": uci_get("brightness", "4"),
+        "font_pack": "classic",
         "keep_original": uci_get("keep_original", "1") == "1",
         # dashboard panel items
         "show_time": _uci_bool("show_time", "1"),
@@ -78,16 +79,21 @@ def load_config():
         "show_uptime": _uci_bool("show_uptime", "0"),
         "show_ip": _uci_bool("show_ip", "0"),
         "dash_interval": uci_get("dash_interval", "5"),
+        "auto_rotate": _uci_bool("auto_rotate", "1"),
         # touch control
         "touch_enable": _uci_bool("touch_enable", "1"),
         "touch_action": uci_get("touch_action", "next"),
         "touch_swap_xy": _uci_bool("touch_swap_xy", "0"),
-        "touch_flip_x": _uci_bool("touch_flip_x", "0"),
+        "touch_flip_x": _uci_bool("touch_flip_x", "1"),
         # custom panel layout (parsed JSON object)
         "custom_layout": _custom_layout(),
-        "custom_bg_dir": uci_get("custom_bg_dir", ""),
+        "custom_bg_dir": uci_get("custom_bg_dir", "") or "/usr/share/glanim/custom_bg",
         "custom_bg_frames": int(uci_get("custom_bg_frames", "0") or 0),
         "custom_bg_fps": int(uci_get("custom_bg_fps", "8") or 8),
+        "custom_bg_max_frames": int(uci_get("custom_bg_max_frames", "300") or 300),
+        "bg_mask": uci_get("bg_mask", "20"),
+        "bg_blur": uci_get("bg_blur", "0"),
+        "content_alpha": uci_get("content_alpha", "100"),
     }
 
 
@@ -221,7 +227,7 @@ def run_dashboard():
         sh("uci set glanim.globals.enabled=0; uci commit glanim 2>/dev/null")
 
 
-if cfg["mode"] in ("dashboard", "custom"):
+if cfg["mode"] in ("dashboard", "custom", "clash"):
     run_dashboard()
     sys.exit(0)
 
@@ -252,7 +258,16 @@ write_status(frame_count=frame_count, current=0,
              source=meta.get("source", ""))
 
 try:
+    last_live_bright = int(cfg["brightness"])
     while not stop_flag:
+        try:
+            with open("/tmp/glanim.brightness") as bf:
+                live_b = max(0, min(11, int(float(bf.read().strip()))))
+            if live_b != last_live_bright:
+                set_brightness(live_b)
+                last_live_bright = live_b
+        except Exception:
+            pass
         fr = frames[idx]
         try:
             with open(fr["path"], "rb") as f:

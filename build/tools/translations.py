@@ -8,6 +8,13 @@ are intentionally omitted so the base catalog keeps precedence.
 """
 
 GLFANCTL = {
+    "Frames / GIF / image": "帧包 / GIF / 图片",
+    "Loop a frame pack; a one-frame pack holds as a still image.": "循环播放帧包；单帧图自然停留。",
+    "Third-party screen": "第三方屏幕",
+    "ON = plugin screen, OFF = OEM gl_screen. Long-press the panel to return to OEM.": "ON = 插件屏幕，OFF = 原厂 gl_screen；长按屏幕可切回原厂。",
+
+    "Author": "作者",
+    "GitHub project": "GitHub 项目",
     # ---- controller menu ----
     "Fan Control": "风扇控制",
     "Fan Policy": "风扇策略",
@@ -98,6 +105,45 @@ GLFANCTL = {
 }
 
 GLANIM = {
+    "Status opacity": "状态信息透明度",
+    "transparent": "透明",
+    "opaque": "不透明",
+
+    "Download": "下载",
+    "Playback mode 1 · recent uploads": "播放模式 1 · 最近上传",
+    "Last 3 saved backgrounds / GIFs, download or restore.": "最近保存的 3 个背景 / GIF，可下载或恢复。",
+
+    "Background start": "背景起始帧",
+    "Background frames": "背景帧数",
+    "300 frames ≈ 00:30 of the source": "300 帧 ≈ 原片 00:30",
+    "Recent backgrounds · playback mode 1": "最近背景 · 播放模式 1",
+
+    "Frosted glass": "毛玻璃效果",
+    "strong": "强",
+
+    "Auto page rotation": "自动轮换页面",
+    "Automatically rotate multi-page panels; touch still switches manually.": "自动轮换多页面板；触摸仍然可以手动切换。",
+    "Clash status": "Clash 状态",
+    "Clash info": "Clash 详情",
+    "Clash node": "Clash 节点",
+
+    "Device monitoring": "设备监控",
+
+    "Screen enabled": "屏幕总开关",
+    "Master switch: ON = third-party screen, OFF = disabled/OEM. Long-press the panel to return to OEM.": "总开关：ON = 第三方屏幕，OFF = 禁用/原厂；长按屏幕可切回原厂。",
+    "Background mask": "背景蒙版",
+    "original": "原图",
+    "black": "全黑",
+
+    "Replace the OEM gl_screen pages on the 284x76 ST7789 bar panel. Play an uploaded frame pack / GIF / image, or run a live system information panel.": "替换 284×76 ST7789 长条屏上的原厂 gl_screen 页面；可播放上传的帧包 / GIF / 图片，或运行实时系统信息面板。",
+
+    "Play an uploaded frame pack / GIF / image, or run a live system information panel.": "播放上传的帧包 / GIF / 图片，或运行实时系统信息面板。",
+
+    "Frames / GIF / image": "帧包 / GIF / 图片",
+    "Loop a frame pack; a one-frame pack holds as a still image.": "循环播放帧包；单帧图自然停留。",
+    "Third-party screen": "第三方屏幕",
+    "ON = plugin screen, OFF = OEM gl_screen. Long-press the panel to return to OEM.": "ON = 插件屏幕，OFF = 原厂 gl_screen；长按屏幕可切回原厂。",
+
     # ---- controller menu ----
     "Screen Animation": "屏幕动画",
     "Screen Custom": "屏幕自定义",
@@ -398,4 +444,20 @@ GLANIM = {
     "Set as custom background": "设为自定义背景",
     "or click to choose · JPG / PNG / GIF / BMP / MP4 / WebM · GIF/video up to 300 frames (resolution-aware)": "或点击选择 · JPG / PNG / GIF / BMP / MP4 / WebM · GIF/视频最多 300 帧（按分辨率自动调整）",
     "Load media in Image studio, then click Set as custom background.": "在图片工坊载入图片/GIF/视频后，点“设为自定义背景”。",
+    "Font pack": "字体包",
+    "Classic 5x7": "经典 5×7",
+    "Bold 5x7": "粗体 5×7",
+    "Compact 4x7": "紧凑 4×7",
+    "Applies to the dashboard and custom panel.": "应用于系统面板和自定义面板。",
+    "OpenClash": "OpenClash",
+    "OpenClash status": "OpenClash 状态",
+    "Clash state, live rates, total traffic, connections and resources.": "OpenClash 状态、实时速率、累计流量、连接数和系统资源。",
+    "Start/stop OpenClash and show its status on the panel.": "启动/停止 OpenClash，并在屏幕上显示其状态。",
+    "OpenClash service": "OpenClash 服务",
+    "Start or stop the OpenClash init service.": "启动或停止 OpenClash 服务。",
+    "OpenClash is not installed.": "未安装 OpenClash。",
+    "running": "运行中",
+    "stopped": "已停止",
+    "Author": "作者",
+    "GitHub project": "GitHub 项目",
 }

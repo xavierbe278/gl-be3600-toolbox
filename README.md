@@ -2,6 +2,8 @@
 
 [中文](README.md) · [English](README.en.md)
 
+作者：**@xavierbe278** · GitHub：[gl-be3600-toolbox](https://github.com/xavierbe278/gl-be3600-toolbox)
+
 > **开源 / 研究学习项目**  
 > 本项目以开源方式发布，主要用于个人研究、学习和自用。它不是 GL.iNet 官方固件或官方插件，不提供任何形式的担保；刷机、root、修改原厂管理面板均有风险，请先备份并自行承担后果。请遵守当地法律法规以及 GL.iNet / OpenWrt / LuCI 的许可协议。
 
@@ -16,8 +18,8 @@
 
 | 插件 | 版本 | 目录 | 中文 | English |
 |---|---|---|---|---|
-| **屏幕自定义 / Screen Custom** | `1.3.3-1` | [`plugins/screen-custom/`](plugins/screen-custom/) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
-| **风扇控制 / Fan Control** | `1.0.4-1` | [`plugins/fan-control/`](plugins/fan-control/) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
+| **屏幕自定义 / Screen Custom** | `1.8.2-1` | [`plugins/screen-custom/`](plugins/screen-custom/) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
+| **风扇控制 / Fan Control** | `1.0.7-1` | [`plugins/fan-control/`](plugins/fan-control/) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
 
 ### 屏幕自定义
 
@@ -26,9 +28,11 @@
 - 图片 / GIF / MP4 背景；
 - 视频循环播放（浏览器取帧，路由器只播放 RGB565 帧）；
 - 图片工坊、URL 图片 / 网页截图、5×7 方块点阵字体；
+- OpenClash 状态页（状态 / 速率 / 流量 / 连接数 / CPU / 内存）与服务开关；
+- 物理拨动开关切换官方 / 第三方屏幕；
 - 可选 gl-ui：显示管理卡片 + 概览风扇展开按钮。
 
-![屏幕自定义](plugins/screen-custom/images/screen-custom.png)
+![屏幕自定义](plugins/screen-custom/images/screen-page.png)
 
 ### 风扇控制
 
@@ -38,27 +42,27 @@
 - 10 档曲线编辑器 + 当前温度标记；
 - 独立保存，保存即应用。
 
-![风扇控制](plugins/fan-control/images/fan-control.png)
+![风扇控制](plugins/fan-control/images/fan-page.png)
 
 ## 安装包
 
 | 插件 | 安装包 |
 |---|---|
-| 屏幕自定义 | [luci-app-glanim_1.3.3-1](plugins/screen-custom/releases/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk) |
-| 风扇控制 | [luci-app-glfanctl_1.0.4-1](plugins/fan-control/releases/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk) |
+| 屏幕自定义 | [luci-app-glanim_1.8.2-1](plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk) |
+| 风扇控制 | [luci-app-glfanctl_1.0.7-1](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) |
 
 快速安装：
 
 ```sh
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk \
-  /tmp/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk \
+  /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
 ```
 
-> 两个插件独立安装；gl-ui 原厂面板桥接随 **屏幕插件 1.3.3** 安装。只装风扇插件不会出现原厂入口。  
+> 两个插件独立安装；gl-ui 原厂面板桥接随 **屏幕插件 1.8.2** 安装。只装风扇插件不会出现原厂入口。  
 > 安装包未签名，请从本仓库 Releases 下载并核对 `SHA256SUMS`。
 
 ## 仓库结构
@@ -141,7 +145,6 @@ python build/verify_final_ipk.py
 - 代码：[MIT License](LICENSE)
 - 风险说明：[DISCLAIMER.md](DISCLAIMER.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
-- 上传 GitHub 指引：[UPLOAD.md](UPLOAD.md)
 
 GL.iNet、GL.iNet 标识、LuCI、OpenWrt 及相关商标、固件资源归各自权利人所有；本项目不包含 GL.iNet 闭源固件代码。
 

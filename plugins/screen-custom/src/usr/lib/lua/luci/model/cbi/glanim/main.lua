@@ -6,7 +6,7 @@ local fs = require "nixio.fs"
 
 local FRAMES_DEFAULT = "/usr/share/glanim/frames"
 local FRAME_BYTES = 76 * 284 * 2
-local VERSION = "1.3.3"
+local VERSION = "1.8.2"
 
 local function h(value)
 	return util.pcdata(tostring(value or ""))
@@ -126,9 +126,14 @@ if custom_raw ~= "" then
 end
 if type(custom_layout) ~= "table" then custom_layout = DEFAULT_LAYOUT end
 
-local custom_bg_dir = cfg_str("custom_bg_dir", "")
+local custom_bg_dir = cfg_str("custom_bg_dir", "/usr/share/glanim/custom_bg")
 local custom_bg_frames = tonumber(cfg_str("custom_bg_frames", "0")) or 0
 local custom_bg_fps = tonumber(cfg_str("custom_bg_fps", "8")) or 8
+local bg_mask = tonumber(cfg_str("bg_mask", "20")) or 45
+local bg_blur = tonumber(cfg_str("bg_blur", "0")) or 0
+local content_alpha = tonumber(cfg_str("content_alpha", "100")) or 100
+if bg_mask < 0 then bg_mask = 0 end
+if bg_mask > 100 then bg_mask = 100 end
 
 local PAGE = { "admin", "services", "glanim" }
 local function page_url(...)
@@ -139,7 +144,7 @@ local cur_lang = (luci.i18n.context and luci.i18n.context.lang) or "zh-cn"
 local is_zh = (cur_lang:sub(1, 2) == "zh")
 local cur_enabled = cfg_bool("enabled", false)
 local cur_mode = cfg_str("mode", "gif")
-if cur_mode ~= "gif" and cur_mode ~= "still" and cur_mode ~= "slideshow" and cur_mode ~= "dashboard" and cur_mode ~= "custom" then
+if cur_mode ~= "gif" and cur_mode ~= "dashboard" and cur_mode ~= "custom" and cur_mode ~= "clash" then
 	cur_mode = "gif"
 end
 local cur_fps = cfg_num("fps", 0, 0, 30)
@@ -154,13 +159,14 @@ local cur_show_net = cfg_bool("show_net", true)
 local cur_show_uptime = cfg_bool("show_uptime", false)
 local cur_show_ip = cfg_bool("show_ip", false)
 local cur_interval = cfg_num("dash_interval", 5, 2, 30)
+local cur_auto_rotate = cfg_bool("auto_rotate", true)
 local cur_touch = cfg_bool("touch_enable", true)
 local cur_touch_action = cfg_str("touch_action", "next")
 if cur_touch_action ~= "next" and cur_touch_action ~= "wake" and cur_touch_action ~= "none" then
 	cur_touch_action = "next"
 end
 local cur_touch_swap = cfg_bool("touch_swap_xy", false)
-local cur_touch_flip = cfg_bool("touch_flip_x", false)
+local cur_touch_flip = cfg_bool("touch_flip_x", true)
 
 local daemon_pid = (sys.exec("pgrep -f /usr/bin/glanimd") or ""):gsub("%s+", "")
 local screen_pid = (sys.exec("pidof gl_screen") or ""):gsub("%s+", "")
@@ -168,15 +174,21 @@ local daemon_on = #daemon_pid > 0
 local screen_on = #screen_pid > 0
 local bright = read_raw("/sys/class/backlight/soc:backlight/brightness") or "-"
 local live_error = (status and status.error) or ""
+local oc_installed = fs.access("/etc/init.d/openclash")
+local oc_enabled = uci:get("openclash", "config", "enable") == "1"
+local oc_running = #((sys.exec("pidof clash") or ""):gsub("%s+", "")) > 0
+local oc_mode = (sys.exec("uci -q get openclash.config.proxy_mode") or "rule"):gsub("%s+", "")
 
 local function icon(name, cls)
 	local paths = {
+		download = '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/>',
 		screen = '<rect x="3" y="4.5" width="18" height="12.5" rx="2.2"/><path d="M8.5 21h7M12 17v4"/><path d="M7 9.5h5M7 12.5h3"/>',
 		gif = '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M7 9h4M7 12h6M7 15h3"/><circle cx="16.5" cy="9" r="1.2" fill="currentColor" stroke="none"/>',
 		still = '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4 17l5-5 4 4 3-3 4 4"/>',
 		slideshow = '<rect x="5" y="3.5" width="14" height="13" rx="2"/><path d="M9 20.5h6M12 16.5v4"/><path d="M9 10l3-2.2L15 10v4.2H9z"/>',
 		dashboard = '<rect x="3" y="4.5" width="18" height="15" rx="2.2"/><path d="M3 11h18M11 11v8.5"/><path d="M7 7.5h2M14 14.5h4M14 17.5h4"/>',
 		custom = '<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h12M20 17h0"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>',
+		clash = '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
 		save = '<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v6h7V4M8 20v-6h8v6"/>',
 		refresh = '<path d="M20 11a8 8 0 1 0-2.3 6.3"/><path d="M20 4v7h-7"/>',
 		undo = '<path d="M9 7L4 12l5 5"/><path d="M4 12h9a6 6 0 1 1 0 12"/>',
@@ -198,18 +210,18 @@ local function badge(text, cls)
 end
 
 local mode_cards = {
-	{ key = "gif", icon = "gif", title = translate("GIF loop"), sub = translate("Loop the frame pack at its native frame delays.") },
-	{ key = "still", icon = "still", title = translate("Still image"), sub = translate("Hold the first frame; ideal for a permanent info card.") },
-	{ key = "slideshow", icon = "slideshow", title = translate("Slideshow"), sub = translate("Play the pack once, then hold the last frame.") },
+	{ key = "gif", icon = "gif", title = translate("Frames / GIF / image"), sub = translate("Loop a frame pack; a one-frame pack holds as a still image.") },
 	{ key = "dashboard", icon = "dashboard", title = translate("System panel"), sub = translate("Live clock, CPU, memory, temperature and network speed.") },
+	{ key = "clash", icon = "clash", title = translate("OpenClash status"), sub = translate("Clash state, live rates, total traffic, connections and resources.") },
 	{ key = "custom", icon = "custom", title = translate("Custom panel"), sub = translate("Design your own labels, values and progress bars.") },
 }
 
 local MODE_TITLE = {
-	gif = translate("GIF loop"),
+	gif = translate("Frames / GIF / image"),
 	still = translate("Still image"),
 	slideshow = translate("Slideshow"),
 	dashboard = translate("System panel"),
+	clash = translate("OpenClash status"),
 	custom = translate("Custom panel"),
 }
 
@@ -272,9 +284,9 @@ add('<div class="gl-hero">')
 add('<div class="gl-hero-main">')
 add('<div class="gl-hero-icon">' .. icon("screen") .. '</div>')
 add('<div class="gl-hero-text">')
-add('<div class="gl-kicker">GL-BE3600 <span></span> 284 × 76 ST7789</div>')
+add('<div class="gl-kicker">GL-BE3600 <span></span> 284 × 76 ST7789 <span></span> v' .. VERSION .. '</div>')
 add('<h1>' .. h(translate("Screen Custom")) .. '</h1>')
-add('<p>' .. h(translate("Replace the OEM gl_screen pages on the 284x76 ST7789 bar panel. Play an uploaded GIF / still / slideshow frame pack, or run a live system information panel.")) .. '</p>')
+add('<p>' .. h(translate("Replace the OEM gl_screen pages on the 284x76 ST7789 bar panel. Play an uploaded frame pack / GIF / image, or run a live system information panel.")) .. '</p>')
 add('</div></div>')
 add('<div class="gl-hero-side">')
 add('<div class="gl-langbar">'
@@ -306,23 +318,50 @@ add('<div class="gl-screen"><div class="gl-screen-bezel">'
 	.. '</div></div>')
 add('<div class="gl-preview-foot"><span id="glanim-preview-caption">' .. h(translate("Waiting for status…")) .. '</span>'
 	.. '<span id="glanim-preview-count"></span></div>')
+
+add('<div class="gl-bg-tools">')
+add('<div class="gl-bg-tools-head"><span>' .. h(translate("Background")) .. '</span>'
+	.. '<span class="gl-bg-status" id="glanim-bg-status">' .. (custom_bg_frames > 0 and (h(custom_bg_frames) .. ' frames') or h(translate("Color background"))) .. '</span>'
+	.. '<a class="gl-link" id="glanim-bg-download" href="#">' .. h(translate("Download")) .. '</a>'
+	.. '<button type="button" class="gl-link" id="glanim-clear-bg">' .. h(translate("Clear background")) .. '</button></div>')
+add('<div class="gl-range"><div class="gl-range-head"><label for="glanim-bg-mask">' .. h(translate("Background mask")) .. '</label><output id="glanim-bg-mask-val">' .. bg_mask .. '</output></div>'
+	.. '<input type="range" id="glanim-bg-mask" min="0" max="100" step="1" value="' .. bg_mask .. '">'
+	.. '<div class="gl-range-hint"><span>0 ' .. h(translate("original")) .. '</span><span>100 ' .. h(translate("black")) .. '</span></div></div>')
+add('<div class="gl-range"><div class="gl-range-head"><label for="glanim-bg-blur">' .. h(translate("Frosted glass")) .. '</label><output id="glanim-bg-blur-val">' .. bg_blur .. '</output></div>'
+	.. '<input type="range" id="glanim-bg-blur" min="0" max="100" step="1" value="' .. bg_blur .. '">'
+	.. '<div class="gl-range-hint"><span>0 ' .. h(translate("off")) .. '</span><span>100 ' .. h(translate("strong")) .. '</span></div></div>')
+add('<div class="gl-range"><div class="gl-range-head"><label for="glanim-content-alpha">' .. h(translate("Status opacity")) .. '</label><output id="glanim-content-alpha-val">' .. content_alpha .. '</output></div>'
+	.. '<input type="range" id="glanim-content-alpha" min="0" max="100" step="1" value="' .. content_alpha .. '">'
+	.. '<div class="gl-range-hint"><span>0 ' .. h(translate("transparent")) .. '</span><span>100 ' .. h(translate("opaque")) .. '</span></div></div>')
+add('</div>')
+
 add('<div class="gl-preview-tabs" id="glanim-preview-tabs" hidden>'
 	.. '<button type="button" data-page="clock" class="is-active">' .. h(translate("Clock")) .. '</button>'
-	.. '<button type="button" data-page="status">' .. h(translate("Status")) .. '</button></div>')
+	.. '<button type="button" data-page="status">' .. h(translate("Status")) .. '</button>'
+	.. '<button type="button" data-page="clash">' .. h(translate("Clash status")) .. '</button>'
+	.. '<button type="button" data-page="clash_info">' .. h(translate("Clash info")) .. '</button>'
+	.. '<button type="button" data-page="clash_node">' .. h(translate("Clash node")) .. '</button></div>')
 add('</section>')
 
 add('<section class="gl-card gl-basic-card">')
-add('<div class="gl-card-head"><div><h2>' .. h(translate("Quick settings")) .. '</h2><p>' .. h(translate("Independent save — nothing here is written to the global LuCI change set.")) .. '</p></div></div>')
-add(switch_row("gl-enabled", translate("Enabled"), translate("Start the animation daemon and take over the panel."), cur_enabled))
+add('<div class="gl-card-head"><div><h2>' .. h(translate("Quick settings")) .. '</h2></div></div>')
+add(switch_row("gl-enabled", translate("Screen enabled"), translate("Master switch: ON = third-party screen, OFF = disabled/OEM. Long-press the panel to return to OEM."), cur_enabled))
 add('<div class="gl-range"><div class="gl-range-head"><label for="gl-brightness">' .. h(translate("Brightness")) .. '</label><output id="gl-brightness-val">' .. cur_bright .. '</output></div>'
 	.. '<input type="range" id="gl-brightness" min="0" max="11" step="1" value="' .. cur_bright .. '">'
 	.. '<div class="gl-range-hint"><span>0 · ' .. h(translate("off")) .. '</span><span>11 · ' .. h(translate("full")) .. '</span></div></div>')
+
+add('<div class="gl-section-sep"></div>')
+add('<div class="gl-section-label">' .. h(translate("Device monitoring")) .. '</div>')
 add('<div class="gl-kpis">')
 add('<div class="gl-kpi">' .. icon("chip") .. '<strong id="gl-kpi-cpu">–</strong><small>CPU</small></div>')
 add('<div class="gl-kpi">' .. icon("chip") .. '<strong id="gl-kpi-mem">–</strong><small>' .. h(translate("Memory")) .. '</small></div>')
 add('<div class="gl-kpi">' .. icon("thermo") .. '<strong id="gl-kpi-temp">–</strong><small>' .. h(translate("Temperature")) .. '</small></div>')
 add('<div class="gl-kpi">' .. icon("net") .. '<strong id="gl-kpi-net">–</strong><small>' .. h(translate("Network")) .. '</small></div>')
 add('</div>')
+add('<div class="gl-mini-note"><span id="glanim-touch-live">Touch: -</span></div>')
+add(switch_row("gl-auto-rotate", translate("Auto page rotation"), translate("Automatically rotate multi-page panels; touch still switches manually."), cur_auto_rotate))
+add('<div class="gl-range"><div class="gl-range-head"><label for="gl-dash-interval">' .. h(translate("Page rotation interval")) .. '</label><output id="gl-dash-interval-val">' .. cur_interval .. 's</output></div>'
+	.. '<input type="range" id="gl-dash-interval" min="2" max="30" step="1" value="' .. cur_interval .. '"></div>')
 add('<div class="gl-mini-note">' .. icon("sliders") .. '<span>' .. h(translate("Tip: the panel preview follows the selected mode; the status row below updates every two seconds.")) .. '</span></div>')
 add('</section>')
 add('</div>')
@@ -346,8 +385,6 @@ add(check_tile("gl-show-net", translate("Show network speed"), translate("WAN do
 add(check_tile("gl-show-uptime", translate("Show uptime"), translate("Router uptime on the clock page."), cur_show_uptime))
 add(check_tile("gl-show-ip", translate("Show LAN IP"), translate("br-lan IPv4 address on the panel."), cur_show_ip))
 add('</div>')
-add('<div class="gl-range"><div class="gl-range-head"><label for="gl-dash-interval">' .. h(translate("Page rotation interval")) .. '</label><output id="gl-dash-interval-val">' .. cur_interval .. 's</output></div>'
-	.. '<input type="range" id="gl-dash-interval" min="2" max="30" step="1" value="' .. cur_interval .. '"></div>')
 add('<div class="gl-subcard"><div class="gl-subhead">' .. icon("screen") .. '<h3>' .. h(translate("Touch control")) .. '</h3></div>')
 add(switch_row("gl-touch-enable", translate("Enable touch control"), translate("Read the CST816X touch panel (/dev/input/event0)."), cur_touch))
 add('<div class="gl-select-row"><label for="gl-touch-action">' .. h(translate("Touch action")) .. '</label><select id="gl-touch-action">' .. touch_options() .. '</select></div>')
@@ -389,10 +426,8 @@ add('<div class="gl-custom-bgrow"><label>' .. h(translate("Background")) .. '</l
 	.. '<button type="button" class="gl-bg-swatch" data-bg="#201014" style="background:#201014" aria-label="wine"></button>'
 	.. '<button type="button" class="gl-bg-swatch" data-bg="#e9eef7" style="background:#e9eef7" aria-label="light"></button>'
 	.. '</span>'
-	.. '<span class="gl-bg-status" id="glanim-bg-status">' .. (custom_bg_frames > 0 and (h(custom_bg_frames) .. ' frames') or h(translate("Color background"))) .. '</span>'
-	.. '<button type="button" class="gl-link" id="glanim-clear-bg">' .. h(translate("Clear background")) .. '</button>'
-	.. '<small class="gl-custom-hint">' .. h(translate("Load media in Image studio, then click Set as custom background.")) .. '</small>'
 	.. '</div>')
+
 add('<div class="gl-custom-grid">')
 add('<div class="gl-custom-left">')
 add('<div class="gl-custom-canvas-wrap"><canvas id="glanim-custom-canvas" width="568" height="152"></canvas>'
@@ -422,10 +457,12 @@ add('<div class="gl-pack-main"><div class="gl-pack-icon">' .. icon("gif") .. '</
 	.. '<small id="glanim-pack-detail">' .. h((pack_count > 0 and (string.format(translate("%s frames"), tostring(pack_count))) or translate("Upload a frame pack to start."))) .. (pack_missing > 0 and (" · " .. h(string.format(translate("%s missing"), tostring(pack_missing)))) or "") .. '</small></div></div>')
 add('<div class="gl-pack-actions">'
 	.. '<button type="button" class="gl-btn" id="glanim-pack-upload">' .. icon("upload") .. h(translate("Upload pack")) .. '</button>'
+	.. '<a class="gl-btn" id="glanim-pack-download" href="#">' .. icon("download") .. h(translate("Download")) .. '</a>'
 	.. '<button type="button" class="gl-btn ghost is-danger" id="glanim-pack-clear">' .. h(translate("Remove")) .. '</button>'
 	.. '<input type="file" id="glanim-pack-file" accept=".tar.gz,.tgz,application/gzip" hidden>'
 	.. '</div>')
 add('</div>')
+add('<div class="gl-play-history" id="glanim-bg-history" hidden><div class="gl-play-history-head"><strong>' .. h(translate("Playback mode 1 · recent uploads")) .. '</strong><span>' .. h(translate("Last 3 saved backgrounds / GIFs, download or restore.")) .. '</span></div><div class="gl-bg-history-slots" id="glanim-bg-history-slots"></div></div>')
 add('<div class="gl-hint-line">' .. h(translate("Frame packs are produced by glanim-convert.py and must contain manifest.json plus 76×284 RGB565 frames.")) .. '</div>')
 add('</section>')
 
@@ -459,6 +496,13 @@ add('<div class="gl-range compact"><div class="gl-range-head"><label for="glanim
 add('<div class="gl-studio-meta"><span id="glanim-frame-info">' .. h(translate("No frames")) .. '</span>'
 	.. '<span class="gl-studio-links"><button type="button" class="gl-link" id="glanim-play">' .. h(translate("Pause")) .. '</button>'
 	.. '<button type="button" class="gl-link" id="glanim-reset">' .. h(translate("Reset crop")) .. '</button></span></div>')
+add('<div class="gl-bg-trim" id="glanim-bg-trim">'
+	.. '<div class="gl-bg-trim-row">'
+	.. '<label>' .. h(translate("Background start")) .. '<input type="number" id="glanim-bg-start" min="1" max="300" step="1" value="1"></label>'
+	.. '<label>' .. h(translate("Background frames")) .. '<input type="number" id="glanim-bg-count" min="1" max="300" step="1" value="300"></label>'
+	.. '</div>'
+	.. '<div class="gl-bg-trim-hint" id="glanim-bg-trim-info">' .. h(translate("300 frames ≈ 00:30 of the source")) .. '</div>'
+	.. '</div>')
 add('<div class="gl-range compact" id="glanim-scrub-wrap" hidden><div class="gl-range-head"><label for="glanim-scrub">' .. h(translate("Frame")) .. '</label><output id="glanim-scrub-val">1/1</output></div>'
 	.. '<input type="range" id="glanim-scrub" min="1" max="1" step="1" value="1"></div>')
 add('<button type="button" class="gl-btn primary block" id="glanim-apply">' .. icon("upload") .. h(translate("Apply to screen")) .. '</button>')
@@ -491,6 +535,7 @@ add('<div class="gl-save-actions">'
 	.. '<button type="button" class="gl-btn primary" id="glanim-save">' .. icon("save") .. h(translate("Save & Apply")) .. '</button>'
 	.. '</div></div>')
 add('<div class="gl-toast" id="glanim-toast" role="status" aria-live="polite"></div>')
+add('<footer class="gl-author">' .. h(translate("Author")) .. ' <strong>@xavierbe278</strong><span>·</span><a href="https://github.com/xavierbe278/gl-be3600-toolbox" target="_blank" rel="noopener">' .. h(translate("GitHub project")) .. '</a><span>·</span>v' .. VERSION .. '</footer>')
 add('</div>')
 
 -- ---------------- config bootstrap ----------------
@@ -506,6 +551,7 @@ local cfg_json = {
 		keepOriginal = cur_keep,
 		framesDir = dir,
 		interval = cur_interval,
+		autoRotate = cur_auto_rotate,
 		showTime = cur_show_time,
 		showCpu = cur_show_cpu,
 		showMem = cur_show_mem,
@@ -530,6 +576,15 @@ local cfg_json = {
 		dir = custom_bg_dir,
 		frames = custom_bg_frames,
 		fps = custom_bg_fps,
+		mask = bg_mask,
+		blur = bg_blur,
+		alpha = content_alpha,
+	},
+	openclash = {
+		installed = oc_installed and true or false,
+		enabled = oc_enabled and true or false,
+		running = oc_running and true or false,
+		mode = oc_mode,
 	},
 	status = {
 		daemon = daemon_on and "1" or "0",
@@ -547,6 +602,16 @@ local cfg_json = {
 		uploadPack = page_url("upload"),
 		clear = page_url("clear"),
 		clearBg = page_url("clear_bg"),
+		bgFrame = page_url("bg_frame"),
+		bgHistory = page_url("bg_history"),
+		bgRestore = page_url("bg_restore"),
+		download = page_url("download"),
+		mask = page_url("mask"),
+		blur = page_url("blur"),
+		contentAlpha = page_url("content_alpha"),
+		page = page_url("page"),
+		brightness = page_url("brightness"),
+		openclash = page_url("openclash"),
 		fetchUrl = page_url("fetch_url"),
 	},
 }

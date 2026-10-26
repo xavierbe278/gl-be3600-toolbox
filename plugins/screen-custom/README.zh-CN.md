@@ -2,6 +2,8 @@
 
 [中文](README.zh-CN.md) · [English](README.en.md) · [返回总览](../../README.md)
 
+作者：**@xavierbe278** · GitHub：[gl-be3600-toolbox](https://github.com/xavierbe278/gl-be3600-toolbox)
+
 > **开源 / 研究学习项目**  
 > 本项目以开源方式发布，主要用于个人研究、学习和自用。它不是 GL.iNet 官方固件或官方插件，不提供任何担保；刷机、root、修改原厂管理面板均有风险，请先备份并自行承担后果。请遵守当地法律法规以及 GL.iNet / OpenWrt / LuCI 的许可协议。
 
@@ -9,17 +11,33 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.3.3-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 GIF / 静态图 / 幻灯片 / 系统面板 / 可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
+`luci-app-glanim` **1.8.2-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
 
 ---
 
+### OpenClash 与物理开关
+
+- OpenClash 状态页：ON/OFF、代理模式、实时上下行、累计流量、连接数、CPU/内存；
+- OpenClash 三页：状态 / 详情 / 节点（国家旗帜、中文国家名、节点类型、延迟、倍率、UDP、连接数）；
+- 屏幕右上角 ON/OFF 触摸按钮，可直接启动/停止 OpenClash；
+- 多页自动轮换，间隔可设 2–30 秒；点击预览 Tab 会锁定页面并关闭自动轮换。
+- 物理拨动开关：ON = glanim，OFF = 原厂 `gl_screen`（挂接 `/etc/rc.button/switch`）；
+- 自定义背景预览改为加载真实背景帧，不再空白或被拉伸。
+
 ## 截图
 
+插件页面：
+
+![插件页面](images/screen-page.png)
+
+屏幕页面效果：
+
+![OpenClash 状态](images/screen-clash-status.png)
+![OpenClash 详情](images/screen-clash-info.png)
+![OpenClash 节点](images/screen-clash-node.png)
+![时钟](images/screen-dashboard-clock.png)
+![状态](images/screen-dashboard-status.png)
 ![自定义面板](images/screen-custom.png)
-
-![原厂显示管理卡片](images/glui-display.png)
-
-![原厂概览展开按钮](images/glui-overview.png)
 
 ---
 
@@ -33,7 +51,12 @@
 - **自定义面板**：在 284×76 画布上自由摆放标签、数值、进度条、矩形、分隔线；
 - **背景媒体**：纯色 / 图片 / GIF / MP4 背景，布局元素绘制在背景之上；
 - **网页截图导入**：直接图片/GIF URL；网页链接可通过 WordPress mShots 生成 568×152 截图后导入；
+- **背景裁剪**：可设置背景起始帧和帧数（默认 300），并显示约等于原片 mm:ss；
+- **最近背景**：保留最近 3 次上传的背景，可在“播放模式 1”中一键恢复；
+- **触摸拖动**：手指拖动时页面实时跟随，松手回中或按阈值翻页；
+- **背景预览**：多帧背景按背景 fps 轮播，不再只显示第一帧；
 - 5×7 方块点阵字库，屏幕文字高对比度；
+
 - 独立保存、实时预览、图片工坊、原子帧包校验；
 - 可选 GL.iNet 原厂面板集成（见下文）；
 - 停用/卸载时恢复原厂 `gl_screen`。
@@ -57,11 +80,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -199,7 +222,7 @@ uci commit glanim
 python build/build_ipk.py screen-custom
 ```
 
-产物：`plugins/screen-custom/releases/luci-app-glanim_1.3.3-1_....ipk`
+产物：`plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_....ipk`
 
 结构：
 

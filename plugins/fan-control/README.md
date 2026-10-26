@@ -2,6 +2,8 @@
 
 [中文](README.zh-CN.md) · [English](README.en.md) · [返回总览](../../README.md)
 
+作者：**@xavierbe278** · GitHub：[gl-be3600-toolbox](https://github.com/xavierbe278/gl-be3600-toolbox)
+
 > **开源 / 研究学习项目**  
 > 本项目以开源方式发布，主要用于个人研究、学习和自用。它不是 GL.iNet 官方固件或官方插件，不提供任何担保；刷机、root、修改原厂管理面板均有风险，请先备份并自行承担后果。请遵守当地法律法规以及 GL.iNet / OpenWrt / LuCI 的许可协议。
 
@@ -9,15 +11,13 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glfanctl` **1.0.4-1**：GL-BE3600 PWM 风扇控制，支持原厂 PID、温度曲线、固定 PWM、停转四种模式，带实时曲线、五路温度和独立保存。
+`luci-app-glfanctl` **1.0.7-1**：GL-BE3600 PWM 风扇控制，支持原厂 PID、温度曲线、固定 PWM、停转四种模式，带实时曲线、五路温度和独立保存。
 
 ---
 
 ## 截图
 
-![风扇控制](images/fan-control.png)
-
-![原厂页面内打开风扇控制](images/glui-fan.png)
+![风扇控制插件页面](images/fan-page.png)
 
 ---
 
@@ -51,11 +51,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -110,7 +110,7 @@ opkg remove luci-app-glfanctl
 想使用原厂面板入口时，请同时安装：
 
 - `luci-app-glanim 1.3.3-1`
-- `luci-app-glfanctl 1.0.4-1`
+- `luci-app-glfanctl 1.0.7-1`
 
 ---
 
@@ -122,7 +122,7 @@ opkg remove luci-app-glfanctl
 python build/build_ipk.py fan-control
 ```
 
-产物：`plugins/fan-control/releases/luci-app-glfanctl_1.0.4-1_....ipk`
+产物：`plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_....ipk`
 
 结构：
 

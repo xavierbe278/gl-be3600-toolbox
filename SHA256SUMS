@@ -1,2 +1,2 @@
-7c66860b2de6493a93685cff08b8b17b3149f3f923ce3c045d40ff0995bea982  plugins/screen-custom/releases/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk
-3bdcb12f270f4d6577332dc1fc289e4c08d87b420d30009601e8a25c997a8497  plugins/fan-control/releases/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
+a955ff7b9dc0ef36c236f871d27d51d6f1862adddaab493c4ea32011e84b9d80  plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk
+d49a4745c17da7690aa4a58938fe798141d2bb26ebc1461a757fd4a4b2f5f51f  plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk

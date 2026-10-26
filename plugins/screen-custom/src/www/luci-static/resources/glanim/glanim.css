@@ -254,7 +254,7 @@ body[data-page="admin-services-glanim-main"] .cbi-map > h2 {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 .gl-page .gl-card {
   border: 1px solid var(--gl-border);
@@ -1114,6 +1114,44 @@ body[data-page="admin-services-glanim-main"] .cbi-map > h2 {
   color: #fff;
   background: var(--gl-primary);
 }
+
+.gl-page .gl-bg-trim {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--gl-border, rgba(120,132,160,0.18));
+  border-radius: 9px;
+  background: rgba(120,132,160,0.05);
+}
+.gl-page .gl-bg-trim-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.gl-page .gl-bg-trim-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--gl-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.gl-page .gl-bg-trim-row input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--gl-border, rgba(120,132,160,0.2));
+  border-radius: 7px;
+  background: var(--gl-surface, #fff);
+  color: var(--gl-text);
+  font-family: var(--gl-mono);
+  font-size: 12px;
+}
+.gl-page .gl-bg-trim-hint {
+  margin-top: 6px;
+  color: var(--gl-faint);
+  font-size: 10px;
+  line-height: 1.5;
+}
 .gl-page .gl-studio-meta {
   display: flex;
   align-items: center;
@@ -1411,7 +1449,7 @@ body[data-page="admin-services-glanim-main"] .cbi-map > h2 {
 
 /* ---------------- custom panel designer ---------------- */
 .gl-page .gl-mode-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .gl-page .gl-custom-toolbar {
   display: flex;
@@ -1695,4 +1733,119 @@ body[data-page="admin-services-glanim-main"] .cbi-map > h2 {
   margin-top: 8px;
   width: 100%;
   justify-content: center;
+}
+
+/* Author / project footer */
+.gl-page .gl-author {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 18px 0 6px;
+  color: var(--gl-muted);
+  font-size: 12px;
+}
+.gl-page .gl-author strong {
+  color: var(--gl-text);
+  font-weight: 600;
+}
+.gl-page .gl-author span {
+  color: var(--gl-faint);
+}
+.gl-page .gl-author a {
+  color: var(--gl-primary);
+  text-decoration: none;
+}
+.gl-page .gl-author a:hover {
+  text-decoration: underline;
+}
+
+
+/* Top preview / quick-settings cards align vertically. */
+.gl-page .gl-grid + .gl-card {
+  margin-top: 16px;
+}
+
+
+.gl-page .gl-grid > .gl-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+
+/* Global background controls (visible in every display mode) */
+.gl-page .gl-bg-tools {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--gl-border);
+}
+.gl-page .gl-bg-tools-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.gl-page .gl-bg-tools-head > span:first-child {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gl-text);
+}
+.gl-page .gl-bg-tools .gl-bg-status {
+  margin-left: auto;
+}
+
+
+.gl-page .gl-play-history {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--gl-border, rgba(120,132,160,0.18));
+  border-radius: 10px;
+  background: rgba(120,132,160,0.05);
+}
+.gl-page .gl-play-history-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin-bottom: 8px; }
+.gl-page .gl-play-history-head strong { color: var(--gl-text); font-size: 12px; }
+.gl-page .gl-play-history-head span { color: var(--gl-faint); font-size: 10px; }
+.gl-page .gl-bg-history-item { display: inline-flex; align-items: center; gap: 4px; }
+.gl-page .gl-bg-history-dl { color: var(--gl-primary); font-size: 10px; font-weight: 600; text-decoration: none; padding: 4px 5px; }
+.gl-page .gl-bg-history-dl:hover { text-decoration: underline; }
+.gl-page .gl-bg-history {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  color: var(--gl-muted);
+  font-size: 11px;
+}
+.gl-page .gl-bg-history-slots { display: flex; gap: 6px; flex-wrap: wrap; }
+.gl-page .gl-bg-history-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--gl-border, rgba(120,132,160,0.2));
+  border-radius: 999px;
+  background: var(--gl-surface, #fff);
+  color: var(--gl-text);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gl-page .gl-bg-history-btn:hover { border-color: var(--gl-primary); color: var(--gl-primary); }
+.gl-page .gl-bg-tools .gl-range {
+  margin-top: 10px;
+}
+
+.gl-page .gl-basic-card .gl-kpis {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gl-page .gl-section-sep {
+  margin: 14px 0 0;
+  border-top: 1px solid var(--gl-border);
+}
+.gl-page .gl-section-label {
+  margin: 8px 0 0;
+  color: var(--gl-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }

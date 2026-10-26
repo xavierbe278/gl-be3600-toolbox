@@ -1,6 +1,6 @@
 #!/bin/sh
 [ -n "$IPKG_INSTROOT" ] && exit 0
-chmod 755 /etc/init.d/glanim /usr/bin/glanimd /usr/bin/glanimdash.py
+chmod 755 /etc/init.d/glanim /usr/bin/glanimd /usr/bin/glanimdash.py /usr/bin/glanim-switch
 chmod 644 /etc/config/glanim
 mkdir -p /usr/share/glanim/frames /usr/share/glanim/custom_bg
 chown -R root:root /usr/share/glanim/frames /usr/share/glanim/custom_bg \
@@ -11,6 +11,11 @@ chown -R root:root /usr/share/glanim/frames /usr/share/glanim/custom_bg \
 rm -f /tmp/glanim.status
 if [ "$(uci get glanim.globals.enabled 2>/dev/null)" = "1" ]; then
   /etc/init.d/glanim restart >/dev/null 2>&1
+fi
+
+# Physical switch: ON = glanim, OFF = OEM gl_screen.
+if [ -f /etc/rc.button/switch ] && [ -f /usr/lib/glanim/switch-hook.sh ] && ! grep -q "GLANIM_SWITCH_HOOK" /etc/rc.button/switch; then
+  sed -i '1r /usr/lib/glanim/switch-hook.sh' /etc/rc.button/switch
 fi
 
 # Optional gl-ui / OEM admin panel integration.

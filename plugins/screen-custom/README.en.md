@@ -2,6 +2,8 @@
 
 [中文](README.zh-CN.md) · [English](README.en.md) · [Back to overview](../../README.md)
 
+Author: **@xavierbe278** · GitHub: [gl-be3600-toolbox](https://github.com/xavierbe278/gl-be3600-toolbox)
+
 > **Open source / research & study project**  
 > This is a community project, not an official GL.iNet firmware or plugin. Flashing, rooting and modifying the OEM admin panel can damage your device. Back up first and use at your own risk. Follow local laws and the GL.iNet / OpenWrt / LuCI licenses.
 
@@ -9,17 +11,33 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.3.3-1** — GIF / still / slideshow / live dashboard / visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
+`luci-app-glanim` **1.8.2-1** — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
 
 ---
 
+### OpenClash and physical switch
+
+- OpenClash status mode: ON/OFF, mode, live RX/TX, total traffic, connections, CPU/MEM;
+- three OpenClash pages: status / details / node (country flag, Chinese country name, node type, latency, rate, UDP, connections);
+- on-screen ON/OFF touch button for the OpenClash service;
+- configurable 2–30 s page rotation; preview tabs lock the page and disable rotation.
+- physical switch: ON = glanim, OFF = OEM `gl_screen` (hook in `/etc/rc.button/switch`);
+- custom background preview now loads the real background frame, so it is visible and not stretched.
+
 ## Screenshots
 
+Plugin page:
+
+![Plugin page](images/screen-page.png)
+
+Panel pages:
+
+![OpenClash status](images/screen-clash-status.png)
+![OpenClash details](images/screen-clash-info.png)
+![OpenClash node](images/screen-clash-node.png)
+![Clock](images/screen-dashboard-clock.png)
+![Status](images/screen-dashboard-status.png)
 ![Custom panel](images/screen-custom.png)
-
-![gl-ui display card](images/glui-display.png)
-
-![gl-ui overview button](images/glui-overview.png)
 
 ---
 
@@ -33,7 +51,12 @@
 - **Custom panel** — labels, values, bars, rectangles and separators on a 284×76 canvas;
 - **Background media** — solid color / image / GIF / MP4 behind the layout;
 - **Webpage / image URL** — direct image or GIF URL; webpage links can be imported via a WordPress mShots screenshot;
+- **Background trim** — choose a start frame and frame count (default 300), with an approximate mm:ss range;
+- **Recent backgrounds** — keeps the last three uploads for one-click restore under playback mode 1;
+- **Live touch drag** — the page follows the finger; release to snap back or switch pages;
+- **Animated preview** — multi-frame backgrounds cycle at the configured background fps;
 - 5×7 blocky bitmap font with high-contrast colors;
+
 - Independent save, live preview, image studio, atomic frame-pack validation;
 - Optional GL.iNet gl-ui integration (display card + fan expand button);
 - Restores the OEM `gl_screen` when disabled or removed.
@@ -57,11 +80,11 @@ Other firmware versions or panel batches may need adjustments.
 ## Install
 
 ```sh
-scp releases/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -195,7 +218,7 @@ From the repository root:
 python build/build_ipk.py screen-custom
 ```
 
-Output: `plugins/screen-custom/releases/luci-app-glanim_1.3.3-1_....ipk`
+Output: `plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_....ipk`
 
 Layout:
 

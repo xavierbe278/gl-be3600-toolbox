@@ -2,6 +2,8 @@
 
 [中文](README.zh-CN.md) · [English](README.en.md) · [返回总览](../../README.md)
 
+作者：**@xavierbe278** · GitHub：[gl-be3600-toolbox](https://github.com/xavierbe278/gl-be3600-toolbox)
+
 > **开源 / 研究学习项目**  
 > 本项目以开源方式发布，主要用于个人研究、学习和自用。它不是 GL.iNet 官方固件或官方插件，不提供任何担保；刷机、root、修改原厂管理面板均有风险，请先备份并自行承担后果。请遵守当地法律法规以及 GL.iNet / OpenWrt / LuCI 的许可协议。
 
@@ -9,17 +11,34 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.3.3-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 GIF / 静态图 / 幻灯片 / 系统面板 / 可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
+`luci-app-glanim` **1.8.2-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
 
 ---
 
+### OpenClash、字体包与物理开关
+
+- OpenClash 状态页：ON/OFF、代理模式、实时上下行、累计流量、连接数、CPU/内存；
+- OpenClash 三页：状态 / 详情 / 节点（国家旗帜、中文国家名、节点类型、延迟、倍率、UDP、连接数）；
+- 屏幕右上角 ON/OFF 触摸按钮，可直接启动/停止 OpenClash；
+- 多页自动轮换，间隔可设 2–30 秒；点击预览 Tab 会锁定页面并关闭自动轮换。
+- 字体包：经典 5×7 / 粗体 5×7 / 紧凑 4×7；
+- 物理拨动开关：ON = glanim，OFF = 原厂 `gl_screen`（挂接 `/etc/rc.button/switch`）；
+- 自定义背景预览改为加载真实背景帧，不再空白或被拉伸。
+
 ## 截图
 
+插件页面：
+
+![插件页面](images/screen-page.png)
+
+屏幕页面效果：
+
+![OpenClash 状态](images/screen-clash-status.png)
+![OpenClash 详情](images/screen-clash-info.png)
+![OpenClash 节点](images/screen-clash-node.png)
+![时钟](images/screen-dashboard-clock.png)
+![状态](images/screen-dashboard-status.png)
 ![自定义面板](images/screen-custom.png)
-
-![原厂显示管理卡片](images/glui-display.png)
-
-![原厂概览展开按钮](images/glui-overview.png)
 
 ---
 
@@ -57,11 +76,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -199,7 +218,7 @@ uci commit glanim
 python build/build_ipk.py screen-custom
 ```
 
-产物：`plugins/screen-custom/releases/luci-app-glanim_1.3.3-1_....ipk`
+产物：`plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_....ipk`
 
 结构：
 
