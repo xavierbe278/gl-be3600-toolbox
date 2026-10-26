@@ -67,7 +67,7 @@ rm -f /tmp/luci-indexcache*
 | Fan Control | `1.0.7-1` | [IPK](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
 
 - Source: [`plugins/screen-custom/`](plugins/screen-custom/) · [`plugins/fan-control/`](plugins/fan-control/)
-- Full package: [zip](packages/gl-be3600-toolbox-v1.9.5.zip) · [tar.gz](packages/gl-be3600-toolbox-v1.9.5.tar.gz)
+- Full package: [zip](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.zip) · [tar.gz](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.tar.gz)
 
 ---
 

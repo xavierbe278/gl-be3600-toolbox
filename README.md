@@ -68,7 +68,7 @@ rm -f /tmp/luci-indexcache*
 
 - 屏幕插件源码与 PC 工具：[`plugins/screen-custom/`](plugins/screen-custom/)
 - 风扇插件源码：[`plugins/fan-control/`](plugins/fan-control/)
-- 完整包：[zip](packages/gl-be3600-toolbox-v1.9.5.zip) · [tar.gz](packages/gl-be3600-toolbox-v1.9.5.tar.gz)
+- 完整包：[zip](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.zip) · [tar.gz](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.tar.gz)
 
 ---
 
