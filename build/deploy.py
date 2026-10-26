@@ -12,25 +12,13 @@ HOST = os.environ.get("ROUTER_HOST", "192.168.8.1")
 USER = os.environ.get("ROUTER_USER", "root")
 PASS = os.environ.get("ROUTER_PASS", "")
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
+DEL = os.path.join(HERE, "deliverables")
 EXTRACT = os.path.join(HERE, "extract")
 
-PKG_DIRS = [
-    os.path.join(ROOT, "plugins", "screen-custom", "releases"),
-    os.path.join(ROOT, "plugins", "fan-control", "releases"),
-]
 PKGS = [
-    "luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk",
-    "luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk",
+    "luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk",
+    "luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk",
 ]
-
-
-def pkg_path(name):
-    for d in PKG_DIRS:
-        p = os.path.join(d, name)
-        if os.path.exists(p):
-            return p
-    raise SystemExit("package not found: " + name)
 
 
 def connect():
@@ -59,7 +47,7 @@ def local_extract():
             if os.path.isfile(f): os.remove(f)
     os.makedirs(EXTRACT, exist_ok=True)
     for ipk in PKGS:
-        data = open(pkg_path(ipk), "rb").read()
+        data = open(os.path.join(DEL, ipk), "rb").read()
         outer = tarfile.open(fileobj=io.BytesIO(data), mode="r:gz")
         inner_buffers = {}
         for member in outer.getmembers():
@@ -96,7 +84,7 @@ def sftp_upload_dir(sftp, local, remote):
 def upload():
     c = connect(); s = c.open_sftp()
     for name in PKGS:
-        s.put(pkg_path(name), "/tmp/" + name)
+        s.put(os.path.join(DEL, name), "/tmp/" + name)
         print("uploaded /tmp/" + name)
     s.close(); c.close()
 
@@ -134,8 +122,8 @@ def check():
 
 
 INSTALL = r"""
-opkg install --force-depends --force-reinstall --force-overwrite /tmp/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
-opkg install --force-depends --force-reinstall --force-overwrite /tmp/luci-app-glanim_1.3.3-1_aarch64_cortex-a53_neon-vfpv4.ipk
+opkg install --force-depends --force-reinstall --force-overwrite /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
+opkg install --force-depends --force-reinstall --force-overwrite /tmp/luci-app-glanim_1.9.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
 echo ====================
 opkg list-installed | grep -E 'glfanctl|glanim'
 """

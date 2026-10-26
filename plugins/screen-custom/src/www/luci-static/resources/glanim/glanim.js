@@ -142,7 +142,12 @@
     touchEnable: !!CURRENT.touchEnable,
     touchAction: CURRENT.touchAction || "next",
     touchSwap: !!CURRENT.touchSwap,
-    touchFlip: !!CURRENT.touchFlip
+    touchFlip: !!CURRENT.touchFlip,
+    menuLang: "auto",
+    menuPages: num(CURRENT.menuPages, 2),
+    menuPage1: CURRENT.menuPage1 || "poweroff,reboot,wifi,next",
+    menuPage2: CURRENT.menuPage2 || "clash,brightness,fan,back",
+    menuPage3: CURRENT.menuPage3 || "wifi,brightness,clash,exit"
   };
   var LAST = clone(S);
   var LAST_CUSTOM = clone(CUSTOM);
@@ -1416,17 +1421,188 @@
       card.setAttribute("aria-checked", active ? "true" : "false");
     });
 
+    el = $("gl-menu-lang"); if (el) el.value = S.menuLang;
+    el = $("gl-menu-pages"); if (el) el.value = String(S.menuPages);
+    el = $("gl-menu-page1"); if (el) el.value = S.menuPage1;
+    el = $("gl-menu-page2"); if (el) el.value = S.menuPage2;
+    el = $("gl-menu-page3"); if (el) el.value = S.menuPage3;
+    updateMenuPageVisibility();
+    renderMenuPreview();
+
     syncPanels();
     updatePreviewTabs();
+  }
+
+  var MENU_PREVIEW_PAGE = 1;
+  var MENU_PREVIEW_LABELS = {
+    poweroff: ["PWR", "关机"], reboot: ["RST", "重启"], wifi: ["WIFI", "无线"],
+    clash: ["CLASH", "猫猫"], brightness: ["LIGHT", "亮度"], fan: ["FAN", "风扇"],
+    next: ["NEXT", "下一页"], back: ["BACK", "上一页"], exit: ["EXIT", "退出"],
+    none: ["", ""]
+  };
+
+  function updateMenuPageVisibility() {
+    var wrap = document.querySelector(".gl-menu-page3");
+    if (wrap) wrap.hidden = S.menuPages < 3;
+    if (MENU_PREVIEW_PAGE > S.menuPages) MENU_PREVIEW_PAGE = S.menuPages;
+    setText("glanim-menu-pages-badge", S.menuPages + (ZH ? " 页" : " pages"));
+    try { renderMenuQueues(); } catch (e) { if (window.console) console.error(e); }
+    try { renderMenuPreview(); } catch (e) { if (window.console) console.error(e); }
+  }
+
+  var MENU_ACTION_ORDER = ["poweroff", "reboot", "wifi", "clash", "brightness", "fan", "next", "back", "exit", "none"];
+
+  function menuQueueArray(page) {
+    var raw = String(S["menuPage" + page] || "");
+    var arr = raw.split(",").map(function (x) { return x.trim(); }).slice(0, 4);
+    while (arr.length < 4) arr.push("none");
+    return arr;
+  }
+
+  function setMenuQueue(page, arr) {
+    S["menuPage" + page] = arr.slice(0, 4).join(",");
+  }
+
+  function renderMenuQueues() {
+    var page = clamp(MENU_PREVIEW_PAGE, 1, S.menuPages);
+    MENU_PREVIEW_PAGE = page;
+    var host = $("gl-menu-queue-active");
+    if (!host) return;
+    host.innerHTML = "";
+    var arr = menuQueueArray(page);
+    for (let i = 0; i < 4; i++) {
+      let item = document.createElement("div");
+      item.className = "gl-menu-item";
+      item.draggable = true;
+      item.setAttribute("data-page", String(page));
+      item.setAttribute("data-index", String(i));
+      var idx = document.createElement("span");
+      idx.className = "gl-menu-item-index";
+      idx.textContent = String(i + 1);
+      item.appendChild(idx);
+      let select = document.createElement("select");
+      MENU_ACTION_ORDER.forEach(function (action) {
+        var opt = document.createElement("option");
+        opt.value = action;
+        var pair = MENU_PREVIEW_LABELS[action] || ["", "—"];
+        opt.textContent = action === "none" ? "—" : (pair[1] + " / " + pair[0]);
+        select.appendChild(opt);
+      });
+      select.value = arr[i];
+      select.addEventListener("change", function () {
+        var a = menuQueueArray(page);
+        a[i] = select.value;
+        setMenuQueue(page, a);
+        renderMenuPreview();
+        setDirty(true);
+      });
+      item.appendChild(select);
+      var moves = document.createElement("div");
+      moves.className = "gl-menu-item-moves";
+      [-1, 1].forEach(function (dir) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.textContent = dir < 0 ? "▲" : "▼";
+        b.disabled = (dir < 0 && i === 0) || (dir > 0 && i === 3);
+        b.addEventListener("click", function (e) {
+          e.stopPropagation();
+          var a = menuQueueArray(page);
+          var j = i + dir;
+          if (j < 0 || j > 3) return;
+          var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+          setMenuQueue(page, a);
+          renderMenuQueues();
+          renderMenuPreview();
+          setDirty(true);
+        });
+        moves.appendChild(b);
+      });
+      item.appendChild(moves);
+      item.addEventListener("dragstart", function (e) {
+        if (e.target && e.target.tagName === "SELECT") { e.preventDefault(); return; }
+        e.dataTransfer.setData("text/plain", page + ":" + i);
+        item.classList.add("is-dragging");
+      });
+      item.addEventListener("dragend", function () { item.classList.remove("is-dragging"); });
+      item.addEventListener("dragover", function (e) { e.preventDefault(); });
+      item.addEventListener("drop", function (e) {
+        e.preventDefault();
+        var raw = e.dataTransfer.getData("text/plain") || "";
+        var bits = raw.split(":");
+        var fromPage = parseInt(bits[0], 10), fromIndex = parseInt(bits[1], 10);
+        if (fromPage !== page || isNaN(fromIndex)) return;
+        var a = menuQueueArray(page);
+        var moved = a.splice(fromIndex, 1)[0];
+        a.splice(i, 0, moved);
+        setMenuQueue(page, a);
+        renderMenuQueues();
+        renderMenuPreview();
+        setDirty(true);
+      });
+      host.appendChild(item);
+    }
+    var title = $("gl-menu-side-title");
+    if (title) title.textContent = (ZH ? "第 " + page + " 页按钮" : "Page " + page + " buttons");
+    Array.prototype.forEach.call(document.querySelectorAll(".gl-menu-preview-tabs button"), function (b) {
+      var p = parseInt(b.getAttribute("data-menu-page"), 10);
+      b.hidden = p > S.menuPages;
+      b.className = p === page ? "is-active" : "";
+    });
+  }
+
+  function previewMenuLang() {
+    if (S.menuLang === "zh" || S.menuLang === "en") return S.menuLang;
+    return ZH ? "zh" : "en";
+  }
+
+  function renderMenuPreview() {
+    var screen = $("glanim-menu-preview");
+    if (!screen) return;
+    var zh = previewMenuLang() === "zh";
+    setText("gl-menu-screen-title", zh ? "菜单" : "MENU");
+    setText("gl-menu-screen-page", MENU_PREVIEW_PAGE + "/" + S.menuPages);
+    setText("gl-menu-screen-exit", zh ? "退出菜单" : "EXIT MENU");
+    var body = $("gl-menu-screen-buttons");
+    if (!body) return;
+    body.innerHTML = "";
+    var raw = MENU_PREVIEW_PAGE === 1 ? S.menuPage1 : (MENU_PREVIEW_PAGE === 2 ? S.menuPage2 : S.menuPage3);
+    var acts = String(raw || "").split(",").map(function (x) { return x.trim(); });
+    for (var i = 0; i < 4; i++) {
+      var action = acts[i] || "none";
+      var cell = document.createElement("div");
+      cell.className = "gl-menu-screen-cell";
+      if (action !== "none") {
+        var pair = MENU_PREVIEW_LABELS[action] || [action.toUpperCase(), action];
+        var btn = document.createElement("div");
+        btn.className = "gl-menu-screen-btn";
+        if (action === "poweroff" || action === "reboot") btn.className += " is-danger";
+        if (action === "next" || action === "back" || action === "exit") btn.className += " is-nav";
+        btn.textContent = zh ? pair[1] : pair[0];
+        cell.appendChild(btn);
+      }
+      body.appendChild(cell);
+    }
+    var tabs = document.querySelectorAll(".gl-menu-preview-tabs button");
+    Array.prototype.forEach.call(tabs, function (b) {
+      var p = parseInt(b.getAttribute("data-menu-page"), 10);
+      b.hidden = p > S.menuPages;
+      b.className = p === MENU_PREVIEW_PAGE ? "is-active" : "";
+    });
   }
 
   function syncPanels() {
     var dash = $("glanim-panel-dashboard");
     var play = $("glanim-panel-playback");
+    var studio = $("glanim-panel-studio");
     var custom = $("glanim-panel-custom");
+    var playback = S.mode === "gif" || S.mode === "still" || S.mode === "slideshow";
     if (dash) dash.style.display = S.mode === "dashboard" ? "" : "none";
-    if (play) play.style.display = (S.mode === "dashboard" || S.mode === "custom" || S.mode === "clash") ? "none" : "";
-    if (custom) custom.style.display = S.mode === "custom" ? "" : "none";
+    if (play) play.style.display = playback ? "" : "none";
+    if (studio) studio.style.display = "";
+    if (custom) {
+      custom.hidden = S.mode !== "custom";
+      custom.style.display = S.mode === "custom" ? "" : "none";
+    }
     if (S.mode === "custom") {
       drawCustomEditor();
       renderCustomPalette();
@@ -1486,6 +1662,11 @@
       touch_action: S.touchAction,
       touch_swap_xy: S.touchSwap ? "1" : "0",
       touch_flip_x: S.touchFlip ? "1" : "0",
+      menu_lang: S.menuLang,
+      menu_pages: String(S.menuPages),
+      menu_page1: S.menuPage1,
+      menu_page2: S.menuPage2,
+      menu_page3: S.menuPage3,
       custom_layout: JSON.stringify(CUSTOM)
     };
   }
@@ -2798,6 +2979,34 @@
     if (touchAction) touchAction.addEventListener("change", function () {
       S.touchAction = touchAction.value;
       setDirty(true);
+    });
+
+    var menuLang = $("gl-menu-lang");
+    if (menuLang) menuLang.addEventListener("change", function () {
+      S.menuLang = ["auto", "zh", "en"].indexOf(menuLang.value) >= 0 ? menuLang.value : "auto";
+      renderMenuPreview();
+      setDirty(true);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".gl-menu-preview-tabs button"), function (b) {
+      b.addEventListener("click", function () {
+        MENU_PREVIEW_PAGE = clamp(parseInt(b.getAttribute("data-menu-page"), 10) || 1, 1, S.menuPages);
+        renderMenuQueues();
+        renderMenuPreview();
+      });
+    });
+    var menuPages = $("gl-menu-pages");
+    if (menuPages) menuPages.addEventListener("change", function () {
+      S.menuPages = clamp(num(menuPages.value, 2), 2, 3);
+      updateMenuPageVisibility();
+      setDirty(true);
+    });
+    ["menuPage1", "menuPage2", "menuPage3"].forEach(function (key) {
+      var input = $("gl-menu-page" + key.slice(-1));
+      if (input) input.addEventListener("input", function () {
+        S[key] = input.value;
+        renderMenuPreview();
+        setDirty(true);
+      });
     });
 
     var framesDir = $("glanim-frames-dir");

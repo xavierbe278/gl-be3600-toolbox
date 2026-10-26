@@ -570,6 +570,24 @@ local function sanitize_layout(l)
 	return out
 end
 
+local function clean_menu(text)
+	local valid = {
+		poweroff=true, reboot=true, wifi=true, clash=true, brightness=true,
+		fan=true, next=true, back=true, exit=true, none=true,
+	}
+	local out = {}
+	for p in tostring(text):gmatch("[^,]+") do
+		local v = p:match("^%s*(.-)%s*$")
+		if valid[v] and #out < 4 then out[#out + 1] = v end
+	end
+	if #out == 0 then
+		return "none,none,none,none"
+	end
+	while #out < 4 do out[#out + 1] = "none" end
+	return table.concat(out, ",")
+end
+
+
 function action_save()
 	local uci = uci_cursor()
 
@@ -600,6 +618,12 @@ function action_save()
 	local bg_mask = numv("bg_mask", 20, 0, 100)
 	local bg_blur = numv("bg_blur", 0, 0, 100)
 	local content_alpha = numv("content_alpha", 100, 0, 100)
+	local menu_lang = luci.http.formvalue("menu_lang") or "auto"
+	if menu_lang ~= "zh" and menu_lang ~= "en" then menu_lang = "auto" end
+	local menu_pages = math.max(2, math.min(3, tonumber(luci.http.formvalue("menu_pages")) or 2))
+	local menu_page1 = clean_menu(luci.http.formvalue("menu_page1") or "")
+	local menu_page2 = clean_menu(luci.http.formvalue("menu_page2") or "")
+	local menu_page3 = clean_menu(luci.http.formvalue("menu_page3") or "")
 
 	local dir = safe_dir(luci.http.formvalue("frames_dir") or "")
 	if not dir then return fail_reply("bad_dir", 400) end
@@ -659,6 +683,11 @@ function action_save()
 	uci:set("glanim", "globals", "bg_mask", tostring(bg_mask))
 	uci:set("glanim", "globals", "bg_blur", tostring(bg_blur))
 	uci:set("glanim", "globals", "content_alpha", tostring(content_alpha))
+	uci:set("glanim", "globals", "menu_lang", menu_lang)
+	uci:set("glanim", "globals", "menu_pages", tostring(menu_pages))
+	uci:set("glanim", "globals", "menu_page1", menu_page1)
+	uci:set("glanim", "globals", "menu_page2", menu_page2)
+	uci:set("glanim", "globals", "menu_page3", menu_page3)
 	local mf = io.open("/tmp/glanim.mask", "w")
 	if mf then mf:write(tostring(bg_mask)); mf:close() end
 	local blf = io.open("/tmp/glanim.blur", "w")

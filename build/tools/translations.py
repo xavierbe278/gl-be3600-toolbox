@@ -105,6 +105,37 @@ GLFANCTL = {
 }
 
 GLANIM = {
+    "Left preview, right current-page buttons. Drag or use arrows to reorder.": "左侧预览，右侧配置当前页按钮；可拖动或使用箭头排序。",
+
+    "Exit menu": "退出菜单",
+
+    "Menu": "菜单",
+
+    "Drag or use arrows to reorder. Each page has 4 buttons.": "拖动或使用箭头排序，每页 4 个按钮。",
+
+    "Page 1 buttons": "第 1 页按钮",
+
+"Default follows the LuCI backend language.": "默认跟随 LuCI 后台语言。",
+
+"Follow LuCI language": "跟随 LuCI 语言",
+
+"Menu preview": "菜单预览",
+
+    "Follows the LuCI backend language": "跟随 LuCI 后台语言",
+
+    "Long-press menu": "长按菜单",
+    "Four horizontal buttons per page, up to 3 pages. Actions are separated by commas.": "每页 4 个横向按钮，最多 3 页；功能用英文逗号分隔。",
+    "Menu language": "菜单语言",
+    "Chinese": "中文",
+    "English": "English",
+    "Menu title and button labels.": "菜单标题和按钮文字。",
+    "Menu pages": "菜单页数",
+    "Default 2, maximum 3.": "默认 2 页，最多 3 页。",
+    "Page 1 actions": "第 1 页功能",
+    "Page 2 actions": "第 2 页功能",
+    "Page 3 actions": "第 3 页功能",
+    "Actions: poweroff, reboot, wifi, clash, brightness, fan, next, back, exit, none. Four per page.": "可用功能：poweroff、reboot、wifi、clash、brightness、fan、next、back、exit、none，每页 4 个。",
+
     "Status opacity": "状态信息透明度",
     "transparent": "透明",
     "opaque": "不透明",

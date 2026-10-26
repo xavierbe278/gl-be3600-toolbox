@@ -11,7 +11,7 @@ Author: **@xavierbe278** · GitHub: [gl-be3600-toolbox](https://github.com/xavie
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.8.2-1** — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
+`luci-app-glanim` **1.9.5-1** — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
 
 ---
 
@@ -38,6 +38,7 @@ Panel pages:
 ![Clock](images/screen-dashboard-clock.png)
 ![Status](images/screen-dashboard-status.png)
 ![Custom panel](images/screen-custom.png)
+![Long-press menu](images/screen-menu.png)
 
 ---
 
@@ -80,11 +81,11 @@ Other firmware versions or panel batches may need adjustments.
 ## Install
 
 ```sh
-scp releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -218,7 +219,7 @@ From the repository root:
 python build/build_ipk.py screen-custom
 ```
 
-Output: `plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_....ipk`
+Output: `plugins/screen-custom/releases/luci-app-glanim_1.9.5-1_....ipk`
 
 Layout:
 

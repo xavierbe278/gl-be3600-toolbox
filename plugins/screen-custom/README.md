@@ -11,7 +11,7 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.8.2-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
+`luci-app-glanim` **1.9.5-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
 
 ---
 
@@ -39,6 +39,7 @@
 ![时钟](images/screen-dashboard-clock.png)
 ![状态](images/screen-dashboard-status.png)
 ![自定义面板](images/screen-custom.png)
+![长按菜单](images/screen-menu.png)
 
 ---
 
@@ -76,11 +77,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.8.2-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -218,7 +219,7 @@ uci commit glanim
 python build/build_ipk.py screen-custom
 ```
 
-产物：`plugins/screen-custom/releases/luci-app-glanim_1.8.2-1_....ipk`
+产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.5-1_....ipk`
 
 结构：
 

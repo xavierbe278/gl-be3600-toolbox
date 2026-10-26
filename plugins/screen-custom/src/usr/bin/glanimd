@@ -94,6 +94,11 @@ def load_config():
         "bg_mask": uci_get("bg_mask", "20"),
         "bg_blur": uci_get("bg_blur", "0"),
         "content_alpha": uci_get("content_alpha", "100"),
+        "menu_lang": uci_get("menu_lang", "auto"),
+        "menu_pages": uci_get("menu_pages", "2"),
+        "menu_page1": uci_get("menu_page1", "poweroff,reboot,wifi,next"),
+        "menu_page2": uci_get("menu_page2", "clash,brightness,fan,back"),
+        "menu_page3": uci_get("menu_page3", "wifi,brightness,clash,exit"),
     }
 
 

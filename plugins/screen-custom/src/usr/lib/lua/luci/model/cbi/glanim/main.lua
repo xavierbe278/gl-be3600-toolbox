@@ -6,7 +6,8 @@ local fs = require "nixio.fs"
 
 local FRAMES_DEFAULT = "/usr/share/glanim/frames"
 local FRAME_BYTES = 76 * 284 * 2
-local VERSION = "1.8.2"
+local VERSION = "1.9.5"
+local ASSET_VERSION = "20261026-menu7"
 
 local function h(value)
 	return util.pcdata(tostring(value or ""))
@@ -132,6 +133,11 @@ local custom_bg_fps = tonumber(cfg_str("custom_bg_fps", "8")) or 8
 local bg_mask = tonumber(cfg_str("bg_mask", "20")) or 45
 local bg_blur = tonumber(cfg_str("bg_blur", "0")) or 0
 local content_alpha = tonumber(cfg_str("content_alpha", "100")) or 100
+local menu_lang = cfg_str("menu_lang", "auto")
+local menu_pages = tonumber(cfg_str("menu_pages", "2")) or 2
+local menu_page1 = cfg_str("menu_page1", "poweroff,reboot,wifi,next")
+local menu_page2 = cfg_str("menu_page2", "clash,brightness,fan,back")
+local menu_page3 = cfg_str("menu_page3", "wifi,brightness,clash,exit")
 if bg_mask < 0 then bg_mask = 0 end
 if bg_mask > 100 then bg_mask = 100 end
 
@@ -276,7 +282,7 @@ local pack_state_cls = pack_valid and "ok" or (pack_count > 0 and "warn" or "")
 local page_html = {}
 local add = function(s) page_html[#page_html + 1] = s end
 
-add('<link rel="stylesheet" href="/luci-static/resources/glanim/glanim.css?v=' .. VERSION .. '">')
+add('<link rel="stylesheet" href="/luci-static/resources/glanim/glanim.css?v=' .. ASSET_VERSION .. '">')
 add('<div class="gl-page" id="glanim-page">')
 
 -- ---------------- hero ----------------
@@ -434,10 +440,12 @@ add('<div class="gl-custom-canvas-wrap"><canvas id="glanim-custom-canvas" width=
 	.. '<div class="gl-custom-grid-label">284 × 76 · ' .. h(translate("snap 1 px")) .. '</div></div>')
 add('<div class="gl-custom-hint">' .. h(translate("Click an element to edit it; drag to move. The preview above uses the same renderer as the panel.")) .. '</div>')
 add('<div class="gl-custom-hint">' .. h(translate("Panel uses a 5×7 blocky bitmap font; only uppercase English, digits and symbols are available.")) .. '</div>')
-add('</div>')
-add('<div class="gl-custom-right">')
+add('<div class="gl-custom-palette">')
 add('<div class="gl-custom-subhead">' .. h(translate("Available data")) .. '<span>' .. h(translate("click to add")) .. '</span></div>')
 add('<div class="gl-data-palette" id="glanim-data-palette"></div>')
+add('</div>')
+add('</div>')
+add('<div class="gl-custom-right">')
 add('<div class="gl-custom-subhead">' .. h(translate("Element")) .. '<span id="glanim-custom-selected-label">' .. h(translate("none selected")) .. '</span></div>')
 add('<div class="gl-custom-inspector" id="glanim-custom-inspector"></div>')
 add('</div></div></section>')
@@ -525,7 +533,51 @@ add('<div class="gl-adv-actions">'
 	.. '<button type="button" class="gl-btn" id="glanim-restart">' .. icon("refresh") .. h(translate("Restart service")) .. '</button>'
 	.. '<button type="button" class="gl-btn ghost is-danger" id="glanim-restore">' .. icon("undo") .. h(translate("Restore OEM screen")) .. '</button>'
 	.. '</div>')
-add('</div></details></section>')
+add('</div>')
+-- ---------------- long-press menu ----------------
+add('<div class="gl-subcard" id="glanim-panel-menu">')
+add('<div class="gl-card-head"><div><h2>' .. h(translate("Long-press menu")) .. '</h2><p>'
+	.. h(translate("Left preview, right current-page buttons. Drag or use arrows to reorder.")) .. '</p></div>'
+	.. '<span class="gl-badge" id="glanim-menu-pages-badge">' .. h(string.format(translate("%s pages"), tostring(menu_pages))) .. '</span></div>')
+add('<div class="gl-menu-editor">')
+add('<div class="gl-menu-left">')
+add('<div class="gl-menu-preview">')
+add('<div class="gl-menu-preview-head"><span>' .. h(translate("Menu preview")) .. '</span>'
+	.. '<span class="gl-menu-preview-tabs">'
+	.. '<button type="button" data-menu-page="1" class="is-active">1</button>'
+	.. '<button type="button" data-menu-page="2">2</button>'
+	.. '<button type="button" data-menu-page="3" class="gl-menu-page3">3</button>'
+	.. '</span></div>')
+add('<div id="glanim-menu-preview" class="gl-menu-screen">')
+add('<div class="gl-menu-screen-head"><span id="gl-menu-screen-title">' .. h(translate("Menu")) .. '</span>'
+	.. '<span id="gl-menu-screen-page">1/2</span>'
+	.. '<span id="gl-menu-screen-exit">' .. h(translate("Exit menu")) .. '</span></div>')
+add('<div class="gl-menu-screen-body" id="gl-menu-screen-buttons"></div>')
+add('</div>')
+add('</div>')
+add('<div class="gl-menu-grid">')
+add('<div class="gl-field"><label for="gl-menu-lang">' .. h(translate("Menu language")) .. '</label><select id="gl-menu-lang">'
+	.. '<option value="auto"' .. (menu_lang ~= "zh" and menu_lang ~= "en" and " selected" or "") .. '>' .. h(translate("Follow LuCI language")) .. '</option>'
+	.. '<option value="zh"' .. (menu_lang == "zh" and " selected" or "") .. '>' .. h(translate("Chinese")) .. '</option>'
+	.. '<option value="en"' .. (menu_lang == "en" and " selected" or "") .. '>' .. h(translate("English")) .. '</option></select></div>')
+add('<div class="gl-field"><label for="gl-menu-pages">' .. h(translate("Menu pages")) .. '</label><select id="gl-menu-pages">'
+	.. '<option value="2"' .. (menu_pages == 2 and " selected" or "") .. '>2</option>'
+	.. '<option value="3"' .. (menu_pages == 3 and " selected" or "") .. '>3</option></select></div>')
+add('</div>')
+add('</div>')
+add('<div class="gl-menu-side">')
+add('<div class="gl-menu-preview-head"><span id="gl-menu-side-title">' .. h(translate("Page 1 buttons")) .. '</span>'
+	.. '<span class="gl-menu-preview-tabs">'
+	.. '<button type="button" data-menu-page="1" class="is-active">1</button>'
+	.. '<button type="button" data-menu-page="2">2</button>'
+	.. '<button type="button" data-menu-page="3" class="gl-menu-page3">3</button>'
+	.. '</span></div>')
+add('<div class="gl-menu-queue-items" id="gl-menu-queue-active"></div>')
+add('<div class="gl-menu-queue-tip">' .. h(translate("Drag or use arrows to reorder. Each page has 4 buttons.")) .. '</div>')
+add('</div>')
+add('</div>')
+
+add('</details></section>')
 
 -- ---------------- save bar + toast ----------------
 add('<div class="gl-savebar" id="glanim-savebar">')
@@ -571,6 +623,11 @@ local cfg_json = {
 		source = pack_source,
 		delays = pack_delays,
 	},
+	menuLang = menu_lang,
+	menuPages = menu_pages,
+	menuPage1 = menu_page1,
+	menuPage2 = menu_page2,
+	menuPage3 = menu_page3,
 	custom = custom_layout,
 	customBg = {
 		dir = custom_bg_dir,
@@ -619,7 +676,7 @@ local cfg_text = json.stringify(cfg_json)
 cfg_text = cfg_text:gsub("<", "\\u003c"):gsub(">", "\\u003e"):gsub("&", "\\u0026")
 
 add('<script>window.GLANIM_CFG=' .. cfg_text .. ';</script>')
-add('<script src="/luci-static/resources/glanim/glanim.js?v=' .. VERSION .. '"></script>')
+add('<script src="/luci-static/resources/glanim/glanim.js?v=' .. ASSET_VERSION .. '"></script>')
 
 local f = Map("glanim", "", "")
 f.reset = false

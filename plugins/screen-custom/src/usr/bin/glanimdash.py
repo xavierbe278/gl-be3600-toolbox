@@ -268,11 +268,13 @@ def bar_color(pct):
 # System statistics collector. File paths are overridable for offline tests.
 # --------------------------------------------------------------------------
 import os
+import math
 import array
 import time as _time
 import subprocess
 import socket
 import urllib.request
+import urllib.parse
 
 
 WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
@@ -528,49 +530,115 @@ COUNTRY_NAMES = {
     "泰國": "TH", "泰国": "TH", "越南": "VN", "菲律宾": "PH", "印尼": "ID",
 }
 CJK_FONT = {
+    '一': ('000', '000', '000', '000', '000', '000', '000', '3ff', '000', '000', '000', '000', '000'),
+    '上': ('000', '000', '000', '010', '010', '010', '1f0', '010', '010', '010', '010', '3ff', '000'),
+    '下': ('000', '000', '000', '3ff', '010', '010', '070', '0d0', '110', '010', '010', '010', '010'),
     '中': ('000', '000', '000', '030', '030', '1fe', '132', '132', '1fe', '030', '030', '030', '000'),
     '亚': ('000', '000', '000', '3ff', '048', '14a', '14a', '1ce', '0cc', '048', '048', '3ff', '000'),
+    '亮': ('000', '000', '000', '010', '3ff', '0fc', '0fc', '000', '3ff', '278', '24c', '1c7', '000'),
+    '代': ('000', '000', '000', '0a4', '124', '3e6', '07f', '027', '066', '246', '2c6', '186', '000'),
+    '优': ('000', '000', '000', '0a4', '124', '3fe', '063', '063', '052', '252', '24a', '1ce', '000'),
     '俄': ('000', '000', '044', '1fe', '152', '052', '3ff', '3d3', '1fe', '092', '2f2', '31a', '000'),
+    '入': ('000', '000', '000', '008', '010', '030', '030', '078', '048', '084', '186', '303', '000'),
+    '全': ('000', '000', '000', '030', '058', '084', '3ff', '030', '1fe', '030', '030', '1fe', '000'),
     '兰': ('000', '000', '000', '084', '048', '3ff', '000', '000', '1fe', '000', '000', '3ff', '000'),
+    '关': ('000', '000', '000', '0c4', '048', '1fe', '030', '3ff', '030', '048', '08c', '303', '000'),
     '其': ('000', '000', '000', '084', '3ff', '084', '0fc', '0fc', '084', '3ff', '0cc', '303', '000'),
+    '再': ('000', '000', '000', '3fe', '030', '1fe', '132', '1fe', '3ff', '102', '102', '0c2', '000'),
+    '减': ('000', '000', '180', '183', '3fa', '088', '2f8', '1fa', '1da', '2d7', '3f5', '364', '000'),
+    '出': ('000', '000', '030', '132', '132', '132', '1fe', '130', '132', '132', '132', '1fe', '000'),
+    '击': ('000', '000', '030', '030', '1fe', '030', '030', '3ff', '030', '132', '132', '1fe', '000'),
+    '切': ('000', '000', '002', '3f2', '122', '12f', '122', '122', '12a', '13e', '112', '1c8', '000'),
+    '则': ('000', '000', '000', '15e', '15e', '15e', '15e', '15e', '156', '14c', '116', '1f3', '000'),
     '利': ('000', '000', '000', '11c', '14f', '144', '17f', '15c', '156', '147', '105', '1c4', '000'),
     '加': ('000', '000', '000', '004', '3df', '354', '356', '356', '352', '352', '3da', '34d', '000'),
+    '动': ('000', '000', '000', '040', '05e', '3e0', '25f', '346', '34a', '32a', '13f', '190', '000'),
+    '单': ('000', '000', '084', '048', '1fe', '132', '1fe', '132', '1fe', '030', '3ff', '030', '030'),
     '南': ('000', '000', '000', '030', '3ff', '030', '1fe', '14a', '1fe', '1fe', '132', '1f2', '000'),
     '印': ('000', '000', '000', '1ee', '122', '122', '13e', '122', '122', '13a', '1e7', '020', '000'),
+    '即': ('000', '000', '000', '1de', '152', '15e', '152', '15e', '152', '15a', '1fa', '042', '000'),
     '台': ('000', '000', '010', '008', '08c', '1f6', '20f', '000', '1fe', '102', '102', '1fe', '000'),
+    '后': ('000', '000', '000', '1e0', '03e', '002', '3fe', '002', '1fa', '10a', '10a', '1f9', '000'),
+    '启': ('000', '000', '000', '030', '1fe', '102', '1fe', '002', '1fa', '10a', '10b', '1f9', '000'),
+    '回': ('000', '000', '000', '1fe', '102', '17a', '14a', '14a', '14a', '17a', '102', '1fe', '000'),
     '国': ('000', '000', '000', '1fe', '102', '1fe', '132', '1fe', '172', '1fe', '102', '1fe', '000'),
     '土': ('000', '000', '000', '030', '030', '030', '1fe', '030', '030', '030', '030', '3ff', '000'),
+    '在': ('000', '000', '000', '008', '3ff', '04c', '044', '1fe', '046', '047', '044', '3fc', '000'),
     '坡': ('000', '000', '000', '042', '3f2', '25f', '052', '1f2', '132', '0df', '0c8', '338', '000'),
     '大': ('000', '000', '030', '030', '030', '3ff', '030', '030', '078', '048', '086', '303', '000'),
+    '失': ('000', '000', '000', '024', '026', '1fe', '022', '030', '3ff', '030', '0cc', '303', '000'),
     '宾': ('000', '000', '000', '030', '3ff', '3e3', '03c', '1fc', '044', '3ff', '0cc', '102', '000'),
+    '将': ('000', '000', '000', '024', '3f5', '18f', '0e6', '1be', '3fe', '195', '1a4', '0c4', '000'),
     '尼': ('000', '000', '000', '1fe', '102', '1fe', '00a', '10a', '0ca', '23a', '21a', '1f1', '000'),
+    '局': ('000', '000', '000', '1fe', '102', '1fe', '1fe', '102', '17a', '14a', '17b', '101', '1c0'),
+    '屏': ('000', '000', '000', '1fe', '102', '1fe', '092', '1fe', '092', '3fe', '09b', '089', '000'),
+    '已': ('000', '000', '000', '1fe', '100', '102', '1fe', '102', '002', '202', '302', '1fe', '000'),
     '巴': ('000', '000', '000', '1fe', '132', '132', '1fe', '102', '002', '202', '302', '1fe', '000'),
+    '幕': ('000', '000', '048', '3ff', '1fe', '1fe', '102', '1fe', '3fe', '3ff', '094', '0d0', '000'),
     '度': ('000', '000', '000', '020', '3fe', '09a', '3fe', '0fa', '1fe', '0d2', '073', '38d', '000'),
     '廷': ('000', '000', '000', '1f7', '046', '042', '1f7', '045', '046', '3f6', '00e', '3f9', '000'),
+    '式': ('000', '000', '0e0', '160', '3ff', '060', '040', '05f', '044', '24c', '2bf', '180', '000'),
     '律': ('000', '000', '000', '044', '1f2', '3fd', '146', '1f2', '043', '1fa', '3fa', '042', '000'),
     '德': ('000', '000', '000', '044', '3fa', '1fd', '1ae', '1fa', '3fb', '1da', '29e', '0e2', '000'),
+    '扇': ('000', '000', '000', '030', '1fe', '102', '1fe', '1fe', '17a', '1ba', '177', '199', '000'),
+    '手': ('000', '000', '1e0', '03e', '030', '1fe', '030', '030', '3ff', '030', '030', '01c', '000'),
     '拿': ('000', '000', '030', '0cc', '37b', '0fc', '0fc', '000', '1fe', '1fe', '3ff', '018', '000'),
+    '按': ('000', '000', '042', '042', '3ff', '222', '022', '3fe', '093', '0f2', '0e2', '31b', '000'),
+    '换': ('000', '000', '000', '022', '1f2', '097', '1fa', '15e', '153', '3fa', '0a2', '31b', '000'),
     '斯': ('000', '000', '000', '392', '07f', '052', '3de', '15e', '132', '13f', '13a', '121', '000'),
     '新': ('000', '000', '000', '3ff', '032', '02a', '3ff', '124', '13f', '12e', '135', '116', '000'),
+    '无': ('000', '000', '000', '1fe', '010', '010', '3ff', '030', '028', '22c', '226', '1c3', '000'),
     '日': ('000', '000', '000', '1fe', '186', '186', '186', '1fe', '186', '186', '186', '1fe', '000'),
+    '曲': ('000', '000', '048', '048', '1fe', '14a', '14a', '1fe', '14a', '14a', '14a', '1fe', '000'),
     '本': ('000', '000', '030', '030', '3ff', '030', '078', '07c', '0b4', '132', '3fd', '030', '030'),
+    '机': ('000', '000', '004', '0f4', '09f', '096', '096', '09f', '095', '294', '294', '38c', '000'),
     '来': ('000', '000', '000', '030', '1fe', '0b4', '0b4', '078', '3ff', '078', '0b4', '333', '030'),
     '根': ('000', '000', '000', '1f6', '116', '1ff', '116', '1fe', '357', '097', '1f6', '336', '000'),
+    '模': ('000', '000', '000', '0a2', '3fa', '0af', '1f2', '1fe', '1f3', '043', '3fa', '3ba', '000'),
+    '次': ('000', '000', '030', '012', '3f6', '118', '16c', '066', '062', '093', '199', '30c', '000'),
     '法': ('000', '000', '042', '046', '1f8', '043', '042', '3f8', '022', '092', '19a', '3f9', '000'),
     '泰': ('000', '000', '010', '1fe', '010', '1fe', '018', '3ff', '3ef', '0f8', '136', '018', '000'),
     '港': ('000', '000', '000', '092', '1fe', '091', '3fe', '0f8', '29e', '1fa', '11a', '1f3', '000'),
     '湾': ('000', '000', '000', '022', '3fe', '1e9', '1fa', '100', '1fa', '1fa', '102', '1e3', '000'),
     '澳': ('000', '000', '000', '022', '1fe', '1fb', '1fa', '1f8', '14a', '3fe', '1ba', '30f', '000'),
+    '点': ('000', '000', '000', '010', '3f0', '010', '1fe', '102', '1fe', '12a', '14a', '259', '000'),
+    '猫': ('000', '000', '000', '0a5', '3fe', '0a7', '3fc', '35e', '3fd', '35c', '3fc', '31f', '000'),
+    '理': ('000', '000', '000', '1ff', '152', '1f2', '15f', '1f2', '042', '1f2', '04f', '3f8', '000'),
+    '直': ('000', '000', '000', '010', '3ff', '010', '1fe', '1fe', '1fe', '102', '1fe', '3ff', '000'),
+    '确': ('000', '000', '000', '020', '1ff', '092', '3fa', '3ff', '25b', '3fa', '25e', '1c8', '000'),
+    '线': ('000', '000', '000', '1a4', '022', '3ff', '027', '3fa', '147', '0c0', '2ef', '398', '000'),
     '罗': ('000', '000', '000', '1fe', '14a', '14a', '1fe', '1f8', '08c', '059', '030', '00e', '000'),
+    '置': ('000', '000', '000', '1fe', '1fe', '010', '3ff', '1fe', '1fe', '1fe', '1fe', '3ff', '000'),
     '美': ('000', '000', '000', '048', '3ff', '030', '1fe', '3ff', '030', '3ff', '0f8', '387', '000'),
     '耳': ('000', '000', '000', '3ff', '084', '0fc', '084', '0fc', '084', '3fc', '08f', '080', '080'),
+    '自': ('000', '000', '000', '010', '1fe', '102', '1fe', '102', '102', '1fe', '102', '1fe', '000'),
+    '节': ('000', '000', '000', '048', '3ff', '048', '1fe', '108', '108', '188', '0e8', '008', '000'),
     '英': ('000', '000', '000', '048', '3ff', '030', '1fe', '132', '132', '3ff', '048', '387', '000'),
     '荷': ('000', '000', '000', '048', '3ff', '004', '3fe', '17e', '15f', '17e', '106', '0c6', '000'),
+    '菜': ('000', '000', '000', '048', '3ff', '000', '1fe', '096', '0f4', '3ff', '0fc', '333', '030'),
     '菲': ('000', '000', '000', '048', '3ff', '000', '3ce', '048', '1ce', '048', '3cf', '048', '000'),
     '西': ('000', '000', '000', '3ff', '058', '3fe', '34a', '34a', '3c6', '302', '302', '3fe', '000'),
+    '规': ('000', '000', '000', '1f4', '15f', '154', '154', '15f', '1d6', '2ee', '2ba', '191', '000'),
+    '言': ('000', '000', '000', '030', '3ff', '000', '1fe', '1fe', '000', '1fe', '102', '1fe', '000'),
+    '认': ('000', '000', '000', '042', '044', '040', '043', '062', '0e2', '0ae', '116', '308', '000'),
+    '设': ('000', '000', '000', '1f2', '314', '018', '003', '1fa', '092', '0ee', '0f6', '318', '000'),
+    '语': ('000', '000', '000', '1fa', '026', '1f8', '133', '3fa', '002', '1f2', '11e', '1f6', '000'),
+    '调': ('000', '000', '000', '3fe', '348', '3eb', '3fa', '36a', '3ae', '3ae', '3ea', '184', '000'),
+    '败': ('000', '000', '040', '03f', '3fb', '13f', '13f', '1df', '0df', '0cc', '1ea', '331', '000'),
     '越': ('000', '000', '000', '144', '3fe', '1e4', '1bf', '0e6', '2be', '3d6', '147', '3f9', '000'),
+    '返': ('000', '000', '002', '1fa', '01c', '1f8', '13b', '0ea', '0ca', '1ee', '116', '3fd', '000'),
+    '进': ('000', '000', '092', '092', '1fe', '090', '093', '3fa', '092', '09a', '08e', '3fd', '000'),
+    '连': ('000', '000', '000', '022', '3fe', '050', '05b', '1fa', '042', '3fa', '046', '3fd', '000'),
+    '退': ('000', '000', '000', '1f2', '116', '1f0', '1f3', '132', '0d2', '1f2', '11e', '3f9', '000'),
+    '选': ('000', '000', '000', '052', '1fe', '040', '3fb', '0b2', '092', '292', '38e', '3fd', '000'),
+    '重': ('000', '000', '000', '1fe', '3ff', '030', '1fe', '1fe', '1fe', '030', '1fe', '3ff', '000'),
+    '长': ('000', '000', '000', '084', '064', '014', '004', '3ff', '024', '064', '0dc', '30c', '000'),
+    '闭': ('000', '000', '002', '3f4', '303', '323', '3ff', '333', '33b', '327', '333', '1c3', '000'),
     '阿': ('000', '000', '000', '3ff', '107', '177', '157', '157', '15f', '17f', '117', '1c3', '000'),
+    '面': ('000', '000', '000', '3ff', '010', '1fe', '14a', '17a', '14a', '17a', '14a', '1fe', '000'),
     '韩': ('000', '000', '000', '044', '3ff', '05f', '1f1', '05f', '3ff', '244', '1df', '044', '000'),
+    '页': ('000', '000', '000', '3ff', '010', '1fe', '132', '132', '112', '172', '0c8', '307', '000'),
+    '风': ('000', '000', '000', '1fe', '1ca', '1aa', '1b2', '1b2', '1ba', '3ea', '3c7', '301', '000'),
     '香': ('000', '000', '000', '0fe', '030', '3ff', '0cc', '3ff', '084', '0fc', '084', '0fc', '000'),
     '马': ('000', '000', '000', '0fe', '084', '084', '084', '3fc', '300', '1ff', '100', '1e0', '000'),
 }
@@ -1690,6 +1758,10 @@ class TouchReader:
         self.dragging = False
         self.drag_moved = False
         self.drag_released = False
+        self.moved_far = False
+        self.tap_id = 0
+        self.tap_x = -1
+        self.tap_y = -1
         # Raw observed extremes, used only for on-screen calibration feedback.
         self.rx_min, self.rx_max = 10 ** 9, -10 ** 9
         self.ry_min, self.ry_max = 10 ** 9, -10 ** 9
@@ -1750,6 +1822,7 @@ class TouchReader:
             self.dragging = False
             self.drag_moved = False
             self.drag_released = False
+            self.moved_far = False
 
     def _press_up(self, gestures):
         """Finger lifted: resolve a tap / long-press gesture from the last point."""
@@ -1765,13 +1838,13 @@ class TouchReader:
         self.last_raw = "%d,%d" % (self.raw_x, self.raw_y)
         now = _time2.monotonic()
         held = now - self.down_at
-        if now - self.last_gesture_at < 0.35:
+        if now - self.last_gesture_at < 0.08:
             return
         dx = px - self.start_x if self.start_set else 0
         dy = py - self.start_y if self.start_set else 0
-        if held >= LONG_PRESS:
-            gestures.append("exit")
-            self.last_gesture = "exit"
+        if held >= LONG_PRESS and not self.moved_far and abs(dx) < 12 and abs(dy) < 12:
+            gestures.append("menu")
+            self.last_gesture = "menu"
             self.last_gesture_at = now
         elif abs(dy) >= 28 and abs(dy) >= abs(dx) * 1.25:
             g = "swipe_down" if dy > 0 else "swipe_up"
@@ -1784,6 +1857,8 @@ class TouchReader:
             self.last_gesture = g
             self.last_gesture_at = now
         elif held <= TAP_MAX:
+            self.tap_id += 1
+            self.tap_x, self.tap_y = px, py
             g = self._tap_gesture(px, py)
             if g:
                 gestures.append(g)
@@ -1850,6 +1925,8 @@ class TouchReader:
                         self.dragging = True
                         if abs(self.drag_dx) > 4 or abs(self.drag_dy) > 4:
                             self.drag_moved = True
+                        if abs(self.drag_dx) > 12 or abs(self.drag_dy) > 12:
+                            self.moved_far = True
         return gestures
 
 
@@ -2070,6 +2147,557 @@ def build_overlay(pages, idx, data, cfg):
     return pixels
 
 
+MENU_LABELS = {
+    "poweroff": ("PWR", "关机"),
+    "reboot": ("RST", "重启"),
+    "wifi": ("WIFI", "无线"),
+    "clash": ("CLASH", "猫猫"),
+    "brightness": ("LIGHT", "亮度"),
+    "fan": ("FAN", "风扇"),
+    "next": ("NEXT", "下一页"),
+    "back": ("BACK", "上一页"),
+    "exit": ("EXIT", "退出"),
+    "none": ("", ""),
+}
+MENU_ACTIONS = set(MENU_LABELS)
+MENU_SUBMENUS = {"brightness", "fan", "clash"}
+MENU_CONFIRM = {"poweroff", "reboot", "wifi"}
+MENU_HOLD = 1.4
+
+
+def detect_menu_lang():
+    for key in ("luci.main.lang", "luci.main.language"):
+        try:
+            out = subprocess.check_output(["uci", "get", key],
+                                          stderr=subprocess.DEVNULL,
+                                          timeout=1.0).decode("utf-8", "ignore").strip()
+            if out:
+                low = out.lower()
+                if low.startswith("zh") or "chinese" in low or low.startswith("cn"):
+                    return "zh"
+                if low.startswith("en"):
+                    return "en"
+        except Exception:
+            pass
+    for key in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(key, "").lower()
+        if value.startswith("zh") or "_cn" in value:
+            return "zh"
+        if value.startswith("en"):
+            return "en"
+    return "zh"
+
+
+def resolve_menu_lang(value):
+    if value in ("zh", "en"):
+        return value
+    return detect_menu_lang()
+
+
+def build_menu_pages(cfg):
+    n = 2
+    try:
+        n = max(2, min(3, int(cfg.get("menu_pages", 2) or 2)))
+    except Exception:
+        n = 2
+    defaults = {
+        1: "poweroff,reboot,wifi,next",
+        2: "clash,brightness,fan,back",
+        3: "wifi,brightness,clash,exit",
+    }
+    pages = []
+    for i in range(1, n + 1):
+        raw = str(cfg.get("menu_page%d" % i, defaults.get(i, "")) or "")
+        acts = [x.strip() for x in raw.split(",") if x.strip() in MENU_ACTIONS]
+        acts = acts[:4]
+        while len(acts) < 4:
+            acts.append("none")
+        pages.append(acts)
+    return pages
+
+
+def menu_label(action, lang):
+    pair = MENU_LABELS.get(action, ("", ""))
+    return pair[1] if lang == "zh" else pair[0]
+
+
+def cjk_width(text, scale=1):
+    return max(0, len(text) * 13 * scale - scale)
+
+
+def menu_hit(px, py, actions):
+    for i, action in enumerate(actions):
+        if action == "none":
+            continue
+        cx = 36 + i * 71
+        if (px - cx) ** 2 + (py - 44) ** 2 <= 26 * 26:
+            return action
+    return None
+
+
+def draw_circle(canvas, cx, cy, r, color, width=1, fill=None):
+    r2 = r * r
+    inner = max(0, r - width) ** 2
+    for y in range(cy - r, cy + r + 1):
+        for x in range(cx - r, cx + r + 1):
+            d = (x - cx) ** 2 + (y - cy) ** 2
+            if d > r2:
+                continue
+            if fill is not None and d <= r2:
+                canvas.pixel(x, y, fill)
+            if width > 0 and d > inner:
+                canvas.pixel(x, y, color)
+
+
+def menu_accent(action):
+    if action in ("poweroff", "reboot"):
+        return (220, 70, 70)
+    if action in ("next", "back", "exit"):
+        return (240, 190, 60)
+    return (90, 150, 255)
+
+
+PENDING_TEXT = {
+    "poweroff": ("即将关机", "POWER OFF SOON"),
+    "reboot": ("即将重启", "REBOOT SOON"),
+    "wifi": ("即将切换无线", "TOGGLE WIFI"),
+    "clash": ("即将切换猫猫", "TOGGLE CLASH"),
+    "brightness": ("即将调节亮度", "CHANGE BRIGHTNESS"),
+    "fan": ("即将进入风扇设置", "FAN SETTINGS"),
+    "exit": ("即将退出菜单", "EXITING MENU"),
+}
+
+
+def mixed_width(text):
+    return sum(13 if ch in CJK_FONT else 6 for ch in text) - (1 if text else 0)
+
+
+def draw_mixed_center(canvas, text, y, color):
+    x = (PHYS_W - mixed_width(text)) // 2
+    for ch in text:
+        if ch in CJK_FONT:
+            canvas.draw_cjk(x, y, ch, color, 1)
+            x += 13
+        else:
+            canvas.draw_text(x, y, ch, color, 1)
+            x += 6
+
+
+def pending_text(action, lang):
+    pair = PENDING_TEXT.get(action)
+    if not pair:
+        return ""
+    return pair[0] if lang == "zh" else pair[1]
+
+
+def draw_menu(canvas, actions, lang="zh", page=0, pages=2, pending=None, progress=0.0, notice=None):
+    canvas.background = None
+    canvas.content_alpha = 1.0
+    canvas.clear((8, 10, 16))
+    canvas.fill_rect(0, 0, PHYS_W, 1, (44, 52, 70))
+    if not notice:
+        if lang == "zh":
+            canvas.draw_cjk(8, 2, "菜单", WHITE, 1)
+            canvas.draw_text(44, 5, "%d/%d" % (page + 1, pages), GREY, 1)
+            hint = "退出菜单"
+            canvas.draw_cjk(PHYS_W - 8 - cjk_width(hint), 2, hint, (240, 190, 60), 1)
+        else:
+            canvas.draw_text(8, 5, "MENU  %d/%d" % (page + 1, pages), WHITE, 1)
+            hint = "EXIT MENU"
+            canvas.draw_text(PHYS_W - 8 - text_width(hint, 1), 5, hint, (240, 190, 60), 1)
+    canvas.fill_rect(8, 14, PHYS_W - 16, 1, (62, 70, 88))
+    for i, action in enumerate(actions):
+        if action == "none":
+            continue
+        cx = 36 + i * 71
+        accent = menu_accent(action)
+        draw_circle(canvas, cx, 44, 24, accent, 2, (46, 54, 70))
+        draw_circle(canvas, cx, 44, 29, (32, 38, 50), 2)
+        label = menu_label(action, lang)
+        if pending == action and action in ("next", "back", "exit"):
+            label = "退出" if lang == "zh" else "EXIT"
+        if not label:
+            continue
+        if lang == "zh" and all(ch in CJK_FONT for ch in label):
+            canvas.draw_cjk(cx - cjk_width(label) // 2, 38, label,
+                            WHITE if action not in ("next", "back", "exit") else accent, 1)
+        else:
+            canvas.draw_text(cx - text_width(label, 1) // 2, 41, label,
+                             WHITE if action not in ("next", "back", "exit") else accent, 1)
+    if notice:
+        draw_mixed_center(canvas, notice, 1, (255, 220, 80))
+
+
+def draw_progress_ring_fb(data, cx, cy, r, progress, rgb):
+    p = max(0.0, min(1.0, progress))
+    if p <= 0:
+        return
+    c = ((rgb[0] & 0xF8) << 8) | ((rgb[1] & 0xFC) << 3) | (rgb[2] >> 3)
+    lo = c & 255; hi = (c >> 8) & 255
+    for deg in range(0, int(360 * p), 2):
+        a = math.radians(deg - 90)
+        for rr in range(r - 2, r + 3):
+            x = int(round(cx + math.cos(a) * rr))
+            y = int(round(cy + math.sin(a) * rr))
+            if 0 <= x < PHYS_W and 0 <= y < PHYS_H:
+                bi = ((FB_H - 1 - x) * FB_W + y) * 2
+                data[bi] = lo; data[bi + 1] = hi
+
+
+def run_menu_action(action):
+    try:
+        if action == "poweroff":
+            subprocess.Popen(["/bin/sh", "-c", "sync; poweroff"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif action == "reboot":
+            subprocess.Popen(["/bin/sh", "-c", "sync; reboot"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif action == "wifi":
+            subprocess.Popen(["/bin/sh", "-c",
+                              "wifi status 2>/dev/null | grep -q '\"up\": true' && wifi down || wifi up"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif action == "clash":
+            toggle_openclash()
+        elif action == "brightness":
+            vals = [2, 4, 6, 8, 10]
+            try:
+                cur = int(open("/tmp/glanim.brightness").read().strip())
+            except Exception:
+                cur = 4
+            nxt = vals[(vals.index(cur) + 1) % len(vals)] if cur in vals else 4
+            with open("/tmp/glanim.brightness", "w") as f:
+                f.write(str(nxt))
+            apply_brightness(nxt)
+        elif action == "fan":
+            subprocess.Popen(["/bin/sh", "-c",
+                              "v=$(uci get glfanctl.globals.enabled 2>/dev/null || echo 0); "
+                              "if [ \"$v\" = \"1\" ]; then uci set glfanctl.globals.enabled=0; "
+                              "else uci set glfanctl.globals.enabled=1; fi; "
+                              "uci commit glfanctl; /etc/init.d/glfanctl restart"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+PROXY_MODES = [("rule", "规则", "RULE"), ("global", "全局", "GLOBAL"), ("direct", "直连", "DIRECT")]
+PROXY_ITEMS = [("mode", "模式", "MODE"), ("best", "优选", "BEST"), ("restart", "重启", "RESTART"), ("stop", "关闭", "STOP")]
+
+
+def _clash_secret():
+    try:
+        return subprocess.check_output(["uci", "get", "openclash.config.dashboard_password"],
+                                       stderr=subprocess.DEVNULL, timeout=1.0).decode().strip()
+    except Exception:
+        return ""
+
+
+def clash_api(method, path, payload=None, timeout=2.5):
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request("http://127.0.0.1:9090" + path, data=data, method=method)
+    req.add_header("Authorization", "Bearer " + _clash_secret())
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        body = r.read().decode("utf-8", "replace")
+    return json.loads(body) if body else {}
+
+
+def current_clash_mode():
+    try:
+        mode = str(clash_api("GET", "/configs").get("mode") or "rule")
+        if mode in ("rule", "global", "direct"):
+            return mode
+    except Exception:
+        pass
+    return "rule"
+
+
+def set_clash_mode(mode):
+    try:
+        clash_api("PATCH", "/configs", {"mode": mode})
+        return True
+    except Exception:
+        return False
+
+
+def best_clash_node():
+    try:
+        proxies = clash_api("GET", "/proxies").get("proxies", {})
+        group = None
+        for name, p in proxies.items():
+            if p.get("type") in ("Selector", "URLTest", "Fallback", "LoadBalance") and p.get("now"):
+                if name.upper() != "GLOBAL":
+                    group = name
+                    break
+        if not group:
+            return ""
+        q = urllib.parse.quote(group, safe="")
+        delays = clash_api("GET", "/group/%s/delay?url=http%%3A%%2F%%2Fwww.gstatic.com%%2Fgenerate_204&timeout=5000" % q, timeout=7.0)
+        candidates = [(int(v), k) for k, v in delays.items() if isinstance(v, int) and v > 0]
+        if not candidates:
+            return ""
+        best = min(candidates)[1]
+        clash_api("PUT", "/proxies/%s" % q, {"name": best}, timeout=3.0)
+        return best
+    except Exception:
+        return ""
+
+
+def restart_openclash():
+    try:
+        subprocess.Popen(["/bin/sh", "-c", "/etc/init.d/openclash restart"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def stop_openclash():
+    try:
+        subprocess.Popen(["/bin/sh", "-c",
+                          "uci set openclash.config.enable=0; uci commit openclash; /etc/init.d/openclash stop"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def proxy_hit(px, py):
+    for i in range(4):
+        if (px - (36 + i * 71)) ** 2 + (py - 44) ** 2 <= 26 * 26:
+            return i
+    return -1
+
+
+def draw_proxy(canvas, mode, lang="zh", status=""):
+    canvas.background = None
+    canvas.content_alpha = 1.0
+    canvas.clear((8, 10, 16))
+    canvas.fill_rect(0, 0, PHYS_W, 1, (44, 52, 70))
+    mode_text = next((z if lang == "zh" else e for k, z, e in PROXY_MODES if k == mode), "")
+    if lang == "zh":
+        canvas.draw_cjk(8, 2, "猫猫", WHITE, 1)
+        canvas.draw_cjk(44, 2, mode_text, GREY, 1)
+        canvas.draw_cjk(PHYS_W - 8 - cjk_width("返回"), 2, "返回", (240, 190, 60), 1)
+    else:
+        canvas.draw_text(8, 5, "CLASH", WHITE, 1)
+        canvas.draw_text(48, 5, mode_text, GREY, 1)
+        canvas.draw_text(PHYS_W - 8 - text_width("BACK", 1), 5, "BACK", (240, 190, 60), 1)
+    canvas.fill_rect(8, 14, PHYS_W - 16, 1, (62, 70, 88))
+    for i, (key, zh, en) in enumerate(PROXY_ITEMS):
+        cx = 36 + i * 71
+        accent = (240, 190, 60) if key == "stop" else (90, 150, 255)
+        draw_circle(canvas, cx, 44, 24, accent, 2, (46, 54, 70))
+        label = zh if lang == "zh" else en
+        if lang == "zh":
+            canvas.draw_cjk(cx - cjk_width(label) // 2, 38, label, WHITE, 1)
+        else:
+            canvas.draw_text(cx - text_width(label, 1) // 2, 41, label, WHITE, 1)
+
+
+FAN_MODES = [
+    ("auto", "自动", "AUTO"),
+    ("curve", "曲线", "CURVE"),
+    ("manual", "手动", "MANUAL"),
+    ("stop", "关闭", "STOP"),
+]
+
+
+def current_fan_mode():
+    try:
+        enabled = subprocess.check_output(["uci", "get", "glfanctl.globals.enabled"],
+                                          stderr=subprocess.DEVNULL, timeout=1.0).decode().strip()
+        if enabled == "0":
+            return "stop"
+        mode = subprocess.check_output(["uci", "get", "glfanctl.globals.mode"],
+                                       stderr=subprocess.DEVNULL, timeout=1.0).decode().strip()
+        if mode in ("auto", "curve", "manual", "stop"):
+            return mode
+    except Exception:
+        pass
+    return "auto"
+
+
+def set_fan_mode(mode):
+    if mode not in ("auto", "curve", "manual", "stop"):
+        return
+    try:
+        subprocess.Popen(["/bin/sh", "-c",
+                          "uci set glfanctl.globals.enabled=1; "
+                          "uci set glfanctl.globals.mode=%s; "
+                          "uci commit glfanctl; /etc/init.d/glfanctl restart" % mode],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+def fan_hit(px, py):
+    for i in range(4):
+        if (px - (36 + i * 71)) ** 2 + (py - 44) ** 2 <= 26 * 26:
+            return i
+    return -1
+
+
+def draw_fan(canvas, mode, lang="zh"):
+    canvas.background = None
+    canvas.content_alpha = 1.0
+    canvas.clear((8, 10, 16))
+    canvas.fill_rect(0, 0, PHYS_W, 1, (44, 52, 70))
+    if lang == "zh":
+        canvas.draw_cjk(8, 2, "风扇", WHITE, 1)
+        canvas.draw_cjk(PHYS_W - 8 - cjk_width("返回"), 2, "返回", (240, 190, 60), 1)
+    else:
+        canvas.draw_text(8, 5, "FAN", WHITE, 1)
+        canvas.draw_text(PHYS_W - 8 - text_width("BACK", 1), 5, "BACK", (240, 190, 60), 1)
+    canvas.fill_rect(8, 14, PHYS_W - 16, 1, (62, 70, 88))
+    for i, (key, zh, en) in enumerate(FAN_MODES):
+        cx = 36 + i * 71
+        active = key == mode
+        accent = (240, 190, 60) if active else (90, 150, 255)
+        draw_circle(canvas, cx, 44, 24, accent, 2, (46, 54, 70))
+        label = zh if lang == "zh" else en
+        if lang == "zh":
+            canvas.draw_cjk(cx - cjk_width(label) // 2, 38, label,
+                            (255, 220, 80) if active else WHITE, 1)
+        else:
+            canvas.draw_text(cx - text_width(label, 1) // 2, 41, label,
+                             (255, 220, 80) if active else WHITE, 1)
+
+
+def draw_confirm(canvas, action, lang="zh"):
+    canvas.background = None
+    canvas.content_alpha = 1.0
+    canvas.clear((8, 10, 16))
+    canvas.fill_rect(0, 0, PHYS_W, 1, (44, 52, 70))
+    label = menu_label(action, lang)
+    if lang == "zh":
+        canvas.draw_cjk(8, 2, label, WHITE, 1)
+        canvas.draw_cjk(103, 2, "再次长按确认", GREY, 1)
+        canvas.draw_cjk(PHYS_W - 8 - cjk_width("返回"), 2, "返回", (240, 190, 60), 1)
+    else:
+        canvas.draw_text(8, 5, label, WHITE, 1)
+        canvas.draw_text((PHYS_W - text_width("HOLD AGAIN TO CONFIRM", 1)) // 2, 5,
+                         "HOLD AGAIN TO CONFIRM", GREY, 1)
+        canvas.draw_text(PHYS_W - 8 - text_width("BACK", 1), 5, "BACK", (240, 190, 60), 1)
+    canvas.fill_rect(8, 14, PHYS_W - 16, 1, (62, 70, 88))
+    accent = (220, 70, 70) if action in ("poweroff", "reboot") else (90, 150, 255)
+    draw_circle(canvas, 142, 48, 24, accent, 2, (46, 54, 70))
+    draw_circle(canvas, 142, 48, 29, (32, 38, 50), 2)
+    if lang == "zh":
+        canvas.draw_cjk(142 - cjk_width(label) // 2, 42, label, WHITE, 1)
+    else:
+        canvas.draw_text(142 - text_width(label, 1) // 2, 45, label, WHITE, 1)
+
+
+def draw_brightness(canvas, value, lang="zh"):
+    canvas.background = None
+    canvas.content_alpha = 1.0
+    canvas.clear((8, 10, 16))
+    canvas.fill_rect(0, 0, PHYS_W, 1, (44, 52, 70))
+    if lang == "zh":
+        canvas.draw_cjk(8, 2, "亮度", WHITE, 1)
+        canvas.draw_cjk(PHYS_W - 8 - cjk_width("点击加减"), 2, "点击加减", GREY, 1)
+    else:
+        canvas.draw_text(8, 5, "BRIGHTNESS", WHITE, 1)
+        canvas.draw_text(PHYS_W - 8 - text_width("TAP -/+", 1), 5, "TAP -/+", GREY, 1)
+    canvas.fill_rect(8, 14, PHYS_W - 16, 1, (62, 70, 88))
+    draw_circle(canvas, 50, 40, 20, (90, 150, 255), 2, (46, 54, 70))
+    draw_circle(canvas, 234, 40, 20, (90, 150, 255), 2, (46, 54, 70))
+    canvas.draw_text(48, 37, "-", WHITE, 2)
+    canvas.draw_text(231, 37, "+", WHITE, 2)
+    v = str(max(0, min(11, value)))
+    canvas.draw_text(PHYS_W // 2 - text_width(v, 2) // 2, 33, v, (255, 220, 80), 2)
+    canvas.draw_text(PHYS_W // 2 - text_width("/11", 1) // 2, 52, "/11", GREY, 1)
+    canvas.fill_rect(112, 60, 60, 13, (46, 54, 70))
+    canvas.fill_rect(112, 60, 60, 1, (120, 132, 156))
+    canvas.fill_rect(112, 72, 60, 1, (120, 132, 156))
+    label = "退出" if lang == "zh" else "EXIT"
+    if lang == "zh":
+        canvas.draw_cjk(142 - cjk_width(label) // 2, 61, label, (240, 190, 60), 1)
+    else:
+        canvas.draw_text(142 - text_width(label, 1) // 2, 66, label, (240, 190, 60), 1)
+
+
+def adjust_brightness(delta):
+    try:
+        with open("/tmp/glanim.brightness", "r") as f:
+            cur = int(f.read().strip())
+    except Exception:
+        cur = 4
+    val = max(0, min(11, cur + delta))
+    with open("/tmp/glanim.brightness", "w") as f:
+        f.write(str(val))
+    apply_brightness(val)
+    try:
+        subprocess.Popen(["/bin/sh", "-c",
+                          "uci set glanim.globals.brightness=%d; uci commit glanim" % val],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    return val
+
+
+def compose_horizontal_fb(cur_fb, other_fb, dx):
+    """Compose two fb90m frames with a horizontal physical offset."""
+    off = int(max(-FB_H, min(FB_H, abs(dx))))
+    if off == 0:
+        return bytearray(cur_fb)
+    row = FB_W * 2
+    out = bytearray(FB_BYTES)
+    # fb90m rows run along physical X, reversed; resolve in physical X.
+    for x in range(FB_H):
+        sx = x - dx
+        if sx < 0:
+            src = other_fb
+            sx += FB_H
+        elif sx >= FB_H:
+            src = other_fb
+            sx -= FB_H
+        else:
+            src = cur_fb
+        orow = (FB_H - 1 - x) * row
+        srow = (FB_H - 1 - sx) * row
+        out[orow:orow + row] = src[srow:srow + row]
+    return out
+
+
+def render_neighbor_fb(pages, idx, data, cfg, bg_fb, alpha):
+    if bg_fb is not None:
+        out = bytearray(bg_fb)
+        for bi, c in build_overlay(pages, idx, data, cfg):
+            if alpha < 0.999:
+                bgc = out[bi] | (out[bi + 1] << 8)
+                c = blend565(bgc, c, alpha)
+            out[bi] = c & 255
+            out[bi + 1] = (c >> 8) & 255
+        return bytes(out)
+    oc = Canvas()
+    oc.font = CURRENT_FONT
+    oc.content_alpha = alpha
+    pages[idx][1](oc, data, cfg)
+    draw_nav(oc, len(pages))
+    return oc.render_fb()
+
+
+def compose_vertical_fb(cur_fb, other_fb, dy):
+    """Compose two fb90m frames with a vertical physical offset."""
+    off = int(max(-PHYS_H, min(PHYS_H, abs(dy))))
+    offb = off * 2
+    row = FB_W * 2
+    out = bytearray(FB_BYTES)
+    if off == 0:
+        return bytearray(cur_fb)
+    for y in range(FB_H):
+        ro = y * row
+        if dy < 0:
+            # current moves up; next page comes from the bottom
+            out[ro:ro + row - offb] = cur_fb[ro + offb:ro + row]
+            out[ro + row - offb:ro + row] = other_fb[ro:ro + offb]
+        else:
+            # current moves down; previous page comes from the top
+            out[ro:ro + offb] = other_fb[ro + row - offb:ro + row]
+            out[ro + offb:ro + row] = cur_fb[ro:ro + row - offb]
+    return out
+
+
 def _write_fb(fb, data):
     try:
         os.lseek(fb, 0, os.SEEK_SET)
@@ -2104,35 +2732,32 @@ def animate_slide(fb, old_buf, new_buf, direction, should_stop):
 
 
 def animate_slide_vertical(fb, old_buf, new_buf, direction, should_stop):
-    """Fast 5-frame vertical mode transition."""
-    steps = 5
-    rb = PHYS_W * 3
+    """Vertical mode transition composed directly in fb90m byte rows."""
+    if not old_buf or not new_buf:
+        return
+    oc = Canvas(); oc.buf = bytearray(old_buf)
+    nc = Canvas(); nc.buf = bytearray(new_buf)
+    old_fb = oc.render_fb()
+    new_fb = nc.render_fb()
+    steps = 6
+    row = FB_W * 2
     for step in range(1, steps + 1):
         if should_stop():
             return
         off = PHYS_H * step // steps
-        out = bytearray(len(old_buf))
-        for y in range(PHYS_H):
-            ro = y * rb
+        offb = off * 2
+        out = bytearray(FB_BYTES)
+        for y in range(FB_H):
+            ro = y * row
+            old_row = old_fb[ro:ro + row]
+            new_row = new_fb[ro:ro + row]
             if direction > 0:
-                # Finger down: old slides down, new arrives from the top.
-                if y < off:
-                    src = (PHYS_H - off + y) * rb
-                    out[ro:ro + rb] = new_buf[src:src + rb]
-                else:
-                    src = (y - off) * rb
-                    out[ro:ro + rb] = old_buf[src:src + rb]
+                out[ro:ro + offb] = new_row[:offb]
+                out[ro + offb:ro + row] = old_row[offb:]
             else:
-                # Finger up: old slides up, new arrives from the bottom.
-                if y < PHYS_H - off:
-                    src = (y + off) * rb
-                    out[ro:ro + rb] = old_buf[src:src + rb]
-                else:
-                    src = (y - (PHYS_H - off)) * rb
-                    out[ro:ro + rb] = new_buf[src:src + rb]
-        tmp = Canvas()
-        tmp.buf = out
-        _write_fb(fb, tmp.render_fb())
+                out[ro:ro + row - offb] = old_row[offb:]
+                out[ro + row - offb:ro + row] = new_row[:offb]
+        _write_fb(fb, out)
         _time.sleep(0.012)
 
 
@@ -2198,12 +2823,358 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
     oc_toast_until = 0.0
     oc_toast_text = ""
     last_brightness = -1
+    last_fb = None
+    last_bg_fb = None
+    vertical_key = None
+    vertical_other_fb = None
+    horizontal_key = None
+    horizontal_other_fb = None
+    menu_open = False
+    brightness_open = False
+    brightness_value = 5
+    brightness_key = None
+    fan_open = False
+    fan_mode = "auto"
+    fan_key = None
+    fan_base = None
+    fan_hold = None
+    fan_hold_start = 0.0
+    proxy_open = False
+    proxy_mode = "rule"
+    proxy_status = ""
+    proxy_key = None
+    proxy_base = None
+    proxy_hold = None
+    proxy_hold_start = 0.0
+    confirm_open = False
+    confirm_action = ""
+    confirm_key = None
+    confirm_base = None
+    confirm_hold_start = 0.0
+    last_menu_tap = -1
+    menu_suppress_until = 0.0
+    menu_pages = build_menu_pages(cfg)
+    menu_lang = resolve_menu_lang(cfg.get("menu_lang", "auto"))
+    menu_page = 0
+    menu_base_key = None
+    menu_base = None
+    menu_last_touch = _time.time()
+    menu_hold_action = None
+    menu_hold_start = 0.0
 
     while not should_stop():
         old_buf = None
         slide_vdir = 0
         gestures = touch.poll()
         force_render = bool(gestures) or touch.drag_released
+        menu_was_open = menu_open
+        if menu_open:
+            now = _time.time()
+            if confirm_open:
+                ckey = (confirm_action, menu_lang)
+                if ckey != confirm_key:
+                    draw_confirm(canvas, confirm_action, menu_lang)
+                    confirm_base = bytes(canvas.render_fb())
+                    confirm_key = ckey
+                if touch.tap_id != last_menu_tap:
+                    last_menu_tap = touch.tap_id
+                    if touch.tap_x > 225 and touch.tap_y < 18:
+                        confirm_open = False
+                        menu_base_key = None
+                        menu_last_touch = now
+                if confirm_open and not touch.active:
+                    confirm_hold_start = 0.0
+                if confirm_open and touch.active:
+                    if (touch.last_x - 142) ** 2 + (touch.last_y - 48) ** 2 <= 30 * 30:
+                        if confirm_hold_start <= 0:
+                            confirm_hold_start = now
+                        progress = min(1.0, max(0.0, (now - confirm_hold_start) / MENU_HOLD))
+                        if progress >= 1.0:
+                            run_menu_action(confirm_action)
+                            menu_open = False
+                            confirm_open = False
+                            menu_suppress_until = _time.time() + 5.0
+                            force_render = True
+                            gestures = []
+                        else:
+                            out = bytearray(confirm_base)
+                            draw_progress_ring_fb(out, 142, 48, 29, progress, menu_accent(confirm_action))
+                            _write_fb(fb, out)
+                            _time.sleep(0.05)
+                            continue
+                    else:
+                        confirm_hold_start = 0.0
+                if menu_open:
+                    _write_fb(fb, confirm_base)
+                    _time.sleep(0.05)
+                    continue
+            if fan_open:
+                fkey = (fan_mode, menu_lang)
+                if fkey != fan_key:
+                    draw_fan(canvas, fan_mode, menu_lang)
+                    fan_base = bytes(canvas.render_fb())
+                    fan_key = fkey
+                if touch.tap_id != last_menu_tap:
+                    last_menu_tap = touch.tap_id
+                    if touch.tap_x > 225 and touch.tap_y < 18:
+                        fan_open = False
+                        fan_hold = None
+                        menu_base_key = None
+                        menu_last_touch = now
+                if fan_open and not touch.active:
+                    fan_hold = None
+                if fan_open and touch.active:
+                    fi = fan_hit(touch.last_x, touch.last_y)
+                    if fi >= 0:
+                        if fi != fan_hold:
+                            fan_hold = fi
+                            fan_hold_start = now
+                        progress = min(1.0, max(0.0, (now - fan_hold_start) / MENU_HOLD))
+                        if progress >= 1.0:
+                            fan_mode = FAN_MODES[fi][0]
+                            set_fan_mode(fan_mode)
+                            fan_hold = None
+                            fan_key = None
+                            menu_last_touch = now
+                        else:
+                            out = bytearray(fan_base)
+                            draw_progress_ring_fb(out, 36 + fi * 71, 44, 29, progress, (90, 150, 255))
+                            _write_fb(fb, out)
+                            _time.sleep(0.05)
+                            continue
+                    else:
+                        fan_hold = None
+                if fan_open:
+                    _write_fb(fb, fan_base)
+                    _time.sleep(0.05)
+                    continue
+            if proxy_open:
+                pkey = (proxy_mode, proxy_status, menu_lang)
+                if pkey != proxy_key:
+                    draw_proxy(canvas, proxy_mode, menu_lang, proxy_status)
+                    proxy_base = bytes(canvas.render_fb())
+                    proxy_key = pkey
+                if touch.tap_id != last_menu_tap:
+                    last_menu_tap = touch.tap_id
+                    if touch.tap_x > 225 and touch.tap_y < 18:
+                        proxy_open = False
+                        proxy_hold = None
+                        menu_base_key = None
+                        menu_last_touch = now
+                if proxy_open and not touch.active:
+                    proxy_hold = None
+                if proxy_open and touch.active:
+                    pi = proxy_hit(touch.last_x, touch.last_y)
+                    if pi >= 0:
+                        if pi != proxy_hold:
+                            proxy_hold = pi
+                            proxy_hold_start = now
+                        progress = min(1.0, max(0.0, (now - proxy_hold_start) / MENU_HOLD))
+                        if progress >= 1.0:
+                            key = PROXY_ITEMS[pi][0]
+                            if key == "mode":
+                                order = ["rule", "global", "direct"]
+                                nxt = order[(order.index(proxy_mode) + 1) % 3] if proxy_mode in order else "rule"
+                                set_clash_mode(nxt)
+                                proxy_mode = nxt
+                                proxy_status = ""
+                            elif key == "best":
+                                proxy_status = "已优选" if best_clash_node() else "优选失败"
+                            elif key == "restart":
+                                restart_openclash()
+                                proxy_status = "重启中"
+                            else:
+                                stop_openclash()
+                                proxy_status = "关闭中"
+                            proxy_hold = None
+                            proxy_key = None
+                            menu_last_touch = now
+                        else:
+                            out = bytearray(proxy_base)
+                            draw_progress_ring_fb(out, 36 + pi * 71, 44, 29, progress, (90, 150, 255))
+                            _write_fb(fb, out)
+                            _time.sleep(0.05)
+                            continue
+                    else:
+                        proxy_hold = None
+                if proxy_open:
+                    _write_fb(fb, proxy_base)
+                    _time.sleep(0.05)
+                    continue
+            if brightness_open:
+                if touch.tap_id != last_menu_tap:
+                    last_menu_tap = touch.tap_id
+                    tx, ty = touch.tap_x, touch.tap_y
+                    if 100 <= tx <= 184 and ty >= 58:
+                        brightness_open = False
+                        menu_base_key = None
+                        menu_last_touch = now
+                    elif tx < 95:
+                        brightness_value = adjust_brightness(-1)
+                        menu_last_touch = now
+                    elif tx > 189:
+                        brightness_value = adjust_brightness(1)
+                        menu_last_touch = now
+                bkey = (brightness_value, menu_lang)
+                if bkey != brightness_key:
+                    draw_brightness(canvas, brightness_value, menu_lang)
+                    _write_fb(fb, canvas.render_fb())
+                    brightness_key = bkey
+                _time.sleep(0.05)
+                continue
+            actions = menu_pages[menu_page]
+            pending = None
+            progress = 0.0
+            # A long press on a submenu button must open it without a ring.
+            if "menu" in gestures and not touch.active:
+                act = menu_hit(touch.last_x, touch.last_y, actions)
+                gestures.remove("menu")
+                if act == "brightness":
+                    brightness_value = current_brightness(cfg)
+                    brightness_open = True
+                    menu_last_touch = now
+                elif act == "fan":
+                    fan_mode = current_fan_mode()
+                    fan_open = True
+                    fan_key = None
+                    menu_last_touch = now
+                elif act == "clash":
+                    proxy_mode = current_clash_mode()
+                    proxy_status = ""
+                    proxy_open = True
+                    proxy_key = None
+                    proxy_hold = None
+                    menu_last_touch = now
+                elif act in MENU_CONFIRM:
+                    confirm_action = act
+                    confirm_open = True
+                    confirm_key = None
+                    confirm_hold_start = 0.0
+                    menu_last_touch = now
+            if touch.active:
+                menu_last_touch = now
+            if touch.tap_id != last_menu_tap:
+                menu_last_touch = now
+                last_menu_tap = touch.tap_id
+                if touch.tap_x > 220 and touch.tap_y < 18:
+                    menu_open = False
+                    menu_suppress_until = _time.time() + 5.0
+                    force_render = True
+                    gestures = []
+                    tap_action = None
+                else:
+                    tap_action = menu_hit(touch.tap_x, touch.tap_y, actions)
+                if not tap_action:
+                    if touch.tap_x > PHYS_W - 70 and actions[3] in ("next", "exit"):
+                        tap_action = actions[3]
+                    elif touch.tap_x < 70 and actions[0] in ("back", "exit"):
+                        tap_action = actions[0]
+                if tap_action == "brightness":
+                    brightness_value = current_brightness(cfg)
+                    brightness_open = True
+                    menu_last_touch = now
+                elif tap_action == "fan":
+                    fan_mode = current_fan_mode()
+                    fan_open = True
+                    fan_key = None
+                    menu_last_touch = now
+                elif tap_action == "clash":
+                    proxy_mode = current_clash_mode()
+                    proxy_status = ""
+                    proxy_open = True
+                    proxy_key = None
+                    proxy_hold = None
+                    menu_last_touch = now
+                elif tap_action in MENU_CONFIRM:
+                    confirm_action = tap_action
+                    confirm_open = True
+                    confirm_key = None
+                    confirm_hold_start = 0.0
+                    menu_last_touch = now
+
+                elif tap_action in ("next", "back", "exit"):
+                    if tap_action == "next" and menu_page + 1 < len(menu_pages):
+                        menu_page += 1
+                        actions = menu_pages[menu_page]
+                    elif tap_action == "back" and menu_page > 0:
+                        menu_page -= 1
+                        actions = menu_pages[menu_page]
+                    else:
+                        menu_open = False
+                        menu_suppress_until = _time.time() + 5.0
+                        force_render = True
+                        gestures = []
+            if menu_open and touch.active:
+                pending = menu_hit(touch.last_x, touch.last_y, actions)
+                if pending in MENU_SUBMENUS or pending in MENU_CONFIRM:
+                    pending = None
+                if not pending:
+                    menu_hold_action = None
+            if menu_open:
+                idle = now - menu_last_touch
+                if idle >= 15.0:
+                    menu_open = False
+                    menu_suppress_until = _time.time() + 5.0
+                    force_render = True
+                    gestures = []
+                else:
+                    notice = ""
+                    if pending and pending not in ("next", "back"):
+                        notice = pending_text(pending, menu_lang)
+                    elif not pending and idle >= 10.0:
+                        left = max(1, int(math.ceil(15.0 - idle)))
+                        notice = ("即将在 %ds 后关闭菜单页面" % left) if menu_lang == "zh" else ("MENU CLOSES IN %ds" % left)
+                    key = (menu_page, menu_lang, tuple(actions),
+                           pending if pending in ("next", "back", "exit") else None,
+                           notice)
+                    if key != menu_base_key:
+                        menu_canvas = Canvas()
+                        draw_menu(menu_canvas, actions, menu_lang, menu_page,
+                                  len(menu_pages), pending, 0.0, notice)
+                        menu_base = bytes(menu_canvas.render_fb())
+                        menu_base_key = key
+                        if pending:
+                            menu_hold_action = pending
+                            menu_hold_start = _time.time()
+                        else:
+                            menu_hold_action = None
+                    if menu_open and pending:
+                        if pending != menu_hold_action:
+                            menu_hold_action = pending
+                            menu_hold_start = _time.time()
+                        progress = min(1.0, max(0.0, (_time.time() - menu_hold_start) / MENU_HOLD))
+                        if progress >= 1.0:
+                            if pending not in ("next", "back", "exit"):
+                                run_menu_action(pending)
+                            menu_open = False
+                            menu_suppress_until = _time.time() + 5.0
+                            force_render = True
+                            gestures = []
+                    if menu_open:
+                        out = bytearray(menu_base)
+                        if pending and progress > 0:
+                            slot = actions.index(pending)
+                            draw_progress_ring_fb(out, 36 + slot * 71, 44, 29,
+                                                  progress, menu_accent(pending))
+                        _write_fb(fb, out)
+                        _time.sleep(0.05)
+                        continue
+        else:
+            for g in gestures:
+                if g == "menu" and _time.time() >= menu_suppress_until:
+                    menu_open = True
+                    menu_page = 0
+                    menu_base_key = None
+                    menu_lang = resolve_menu_lang(cfg.get("menu_lang", "auto"))
+                    menu_last_touch = _time.time()
+                    last_menu_tap = touch.tap_id
+                    gestures = []
+                    break
+        if menu_open:
+            _time.sleep(0.05)
+            continue
+        if menu_was_open:
+            gestures = []
         for g in gestures:
             if g == "exit":
                 exit_requested()
@@ -2246,6 +3217,7 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                     oc_toast_until = _time.time() + 2.5
 
         now = _time.time()
+        paused = touch.active
         if not current_auto(cfg):
             try:
                 with open("/tmp/glanim.page", "r") as pf:
@@ -2259,13 +3231,13 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
             except Exception:
                 pass
         # Inside a panel, pages rotate silently (no slide animation).
-        if (len(pages) > 1 and current_auto(cfg)
+        if (len(pages) > 1 and current_auto(cfg) and not paused
                 and now - switch_at >= interval):
             idx = (idx + 1) % len(pages)
             switch_at = now
             force_render = True
 
-        if now - last_data >= 1.0:
+        if now - last_data >= 1.0 and not paused:
             data = col.snapshot()
             last_data = now
         need_render = (force_render or touch.dragging or old_buf is not None
@@ -2273,15 +3245,55 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
         if need_render:
             canvas.bg_dim = 1.0 - current_mask(cfg) / 100.0
             canvas.content_alpha = current_content_alpha(cfg)
+            if (touch.dragging and last_fb is not None
+                    and abs(touch.drag_dx) > 2
+                    and abs(touch.drag_dx) > abs(touch.drag_dy)):
+                dx = int(touch.drag_dx)
+                oi = (idx + (1 if dx < 0 else -1)) % len(pages)
+                hkey = (idx, oi, id(data), id(last_bg_fb))
+                if hkey != horizontal_key:
+                    horizontal_other_fb = render_neighbor_fb(
+                        pages, oi, data, cfg, last_bg_fb, canvas.content_alpha)
+                    horizontal_key = hkey
+                if horizontal_other_fb is not None:
+                    _write_fb(fb, compose_horizontal_fb(last_fb, horizontal_other_fb, dx))
+                    _time.sleep(0.05)
+                    continue
+            if (touch.dragging and last_fb is not None
+                    and abs(touch.drag_dy) > 2
+                    and abs(touch.drag_dy) >= abs(touch.drag_dx)):
+                dy = int(touch.drag_dy)
+                cur_mode = cfg.get("mode")
+                if cur_mode in mode_order:
+                    pos = mode_order.index(cur_mode)
+                    step = -1 if dy < 0 else 1
+                    other_mode = mode_order[(pos + step) % len(mode_order)]
+                else:
+                    other_mode = "clash"
+                vkey = (cur_mode, other_mode, id(data), id(canvas.background), id(last_bg_fb))
+                if vkey != vertical_key:
+                    other_cfg = dict(cfg)
+                    other_cfg["mode"] = other_mode
+                    other_pages = build_pages(other_cfg)
+                    if other_pages:
+                        vertical_other_fb = render_neighbor_fb(
+                            other_pages, 0, data, other_cfg,
+                            last_bg_fb, canvas.content_alpha)
+                        vertical_key = vkey
+                if vertical_other_fb is not None:
+                    _write_fb(fb, compose_vertical_fb(last_fb, vertical_other_fb, dy))
+                    _time.sleep(0.05)
+                    continue
             live_b = current_brightness(cfg)
             if live_b != last_brightness:
                 apply_brightness(live_b)
                 last_brightness = live_b
             fast_ok = False
+            last_bg_fb = None
             blur_now = current_blur(cfg)
             if (bg_sources and not touch.dragging
                     and old_buf is None and now >= oc_toast_until):
-                if now >= next_bg_at:
+                if now >= next_bg_at and not paused:
                     bg_index += 1
                     next_bg_at = now + bg_interval
                 fi = (bg_index - 1) % len(bg_sources) if bg_index else 0
@@ -2299,6 +3311,7 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                         else:
                             bg_fb_cache[dim_key] = fast_effect(raw, blur_now, canvas.bg_dim)
                     out = bytearray(bg_fb_cache[dim_key])
+                    last_bg_fb = bytes(out)
                     ca = canvas.content_alpha
                     for bi, c in overlay_pixels:
                         if ca < 0.999:
@@ -2307,6 +3320,7 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                         out[bi] = c & 255
                         out[bi + 1] = (c >> 8) & 255
                     _write_fb(fb, out)
+                    last_fb = bytes(out)
                     fast_ok = True
             if fast_ok:
                 pass
@@ -2316,7 +3330,7 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                     if blur != bg_blur_last:
                         bg_cache.clear()
                         bg_blur_last = blur
-                    if now >= next_bg_at:
+                    if now >= next_bg_at and not paused:
                         bg_index += 1
                         next_bg_at = now + bg_interval
                     fi = (bg_index - 1) % len(bg_sources) if bg_index else 0
@@ -2349,7 +3363,9 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                 elif old_buf is not None and slide_vdir:
                     animate_slide_vertical(fb, old_buf, bytes(canvas.buf), slide_vdir, should_stop)
                 else:
-                    _write_fb(fb, canvas.render_fb())
+                    frame_fb = canvas.render_fb()
+                    _write_fb(fb, frame_fb)
+                    last_fb = bytes(frame_fb)
             next_render_at = now + (bg_interval if animating else 1.0)
             touch.drag_released = False
 
