@@ -41,7 +41,7 @@ Nothing is downloaded until a choice is made.
 
 ```sh
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk \
+  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk \
   /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
@@ -63,7 +63,7 @@ rm -f /tmp/luci-indexcache*
 
 | Plugin | Version | Package | 中文 | English |
 |---|---|---|---|---|
-| Screen Custom | `1.9.5-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
+| Screen Custom | `1.9.6-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
 | Fan Control | `1.0.7-1` | [IPK](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
 
 - Source: [`plugins/screen-custom/`](plugins/screen-custom/) · [`plugins/fan-control/`](plugins/fan-control/)

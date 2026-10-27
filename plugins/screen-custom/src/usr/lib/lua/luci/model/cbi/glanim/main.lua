@@ -6,8 +6,8 @@ local fs = require "nixio.fs"
 
 local FRAMES_DEFAULT = "/usr/share/glanim/frames"
 local FRAME_BYTES = 76 * 284 * 2
-local VERSION = "1.9.5"
-local ASSET_VERSION = "20261026-menu7"
+local VERSION = "1.9.6"
+local ASSET_VERSION = "20261027-fps15"
 
 local function h(value)
 	return util.pcdata(tostring(value or ""))
@@ -452,13 +452,14 @@ add('</div></div></section>')
 
 -- ---------------- playback settings ----------------
 add('<section class="gl-card gl-panel" id="glanim-panel-playback">')
-add('<div class="gl-card-head"><div><h2>' .. h(translate("Playback")) .. '</h2><p>' .. h(translate("Frame timing and the current frame pack.")) .. '</p></div>'
+add('<div class="gl-card-head"><div><h2>' .. h(translate("Playback")) .. '</h2></div>'
 	.. '<span class="gl-badge ' .. pack_state_cls .. '" id="glanim-pack-badge">' .. h(pack_state) .. '</span></div>')
 add('<div class="gl-two-col">')
 add(switch_row("gl-loop", translate("Loop animation"), translate("Off: stop after the last frame."), cur_loop))
-add('<div class="gl-range"><div class="gl-range-head"><label for="gl-fps">' .. h(translate("Force FPS")) .. '</label><output id="gl-fps-val">' .. (cur_fps == 0 and h(translate("native")) or (cur_fps .. " fps")) .. '</output></div>'
-	.. '<input type="range" id="gl-fps" min="0" max="30" step="1" value="' .. cur_fps .. '">'
-	.. '<div class="gl-range-hint"><span>' .. h(translate("native delay")) .. '</span><span>30 fps</span></div></div>')
+add('<div class="gl-range"><div class="gl-range-head"><label for="gl-fps">' .. h(translate("Force FPS")) .. '</label>'
+	.. '<span class="gl-fps-num"><input type="number" id="gl-fps-number" min="0" max="50" step="1" value="' .. cur_fps .. '"><em>fps</em></span></div>'
+	.. '<input type="range" id="gl-fps" min="0" max="50" step="1" value="' .. cur_fps .. '">'
+	.. '<div class="gl-range-hint"><span>0 = ' .. h(translate("native")) .. '</span><span>50 fps</span></div></div>')
 add('</div>')
 add('<div class="gl-pack">')
 add('<div class="gl-pack-main"><div class="gl-pack-icon">' .. icon("gif") .. '</div><div><strong id="glanim-pack-source">' .. h(pack_source ~= "" and pack_source or translate("No frame pack")) .. '</strong>'
@@ -484,7 +485,7 @@ add('<div class="gl-drop" id="glanim-drop">'
 	.. '<input type="file" id="glanim-file" accept="image/jpeg,image/png,image/gif,image/bmp,video/mp4,video/webm" hidden>'
 	.. '<div class="gl-drop-icon">' .. icon("image") .. '</div>'
 	.. '<strong>' .. h(translate("Drop an image here")) .. '</strong>'
-	.. '<small>' .. h(translate("or click to choose · JPG / PNG / GIF / BMP / MP4 / WebM · GIF/video up to 300 frames (resolution-aware)")) .. '</small>'
+	.. '<small>' .. h(translate("or click to choose · JPG / PNG / GIF / BMP / MP4 / WebM · GIF/video up to 600 frames (resolution-aware)")) .. '</small>'
 	.. '<span class="gl-drop-name" id="glanim-file-name"></span></div>')
 add('<div class="gl-url-row"><input type="url" id="glanim-url" placeholder="https://example.com/image.gif · https://example.com/page">'
 	.. '<label class="gl-url-shot"><input type="checkbox" id="glanim-url-shot" checked> ' .. h(translate("web screenshot")) .. '</label>'
@@ -501,6 +502,10 @@ add('<div class="gl-fit-group" role="group" aria-label="' .. h(translate("Fit mo
 	.. '<button type="button" class="gl-fit" data-fit="stretch">' .. h(translate("Stretch")) .. '</button></div>')
 add('<div class="gl-range compact"><div class="gl-range-head"><label for="glanim-zoom">' .. h(translate("Zoom")) .. '</label><output id="glanim-zoom-val">1.00×</output></div>'
 	.. '<input type="range" id="glanim-zoom" min="1" max="3" step="0.05" value="1"></div>')
+add('<div class="gl-range compact"><div class="gl-range-head"><label for="glanim-pos-x">' .. h(translate("Position X")) .. '</label><output id="glanim-pos-x-val">0</output></div>'
+	.. '<input type="range" id="glanim-pos-x" min="-280" max="280" step="1" value="0"></div>')
+add('<div class="gl-range compact"><div class="gl-range-head"><label for="glanim-pos-y">' .. h(translate("Position Y")) .. '</label><output id="glanim-pos-y-val">0</output></div>'
+	.. '<input type="range" id="glanim-pos-y" min="-84" max="84" step="1" value="0"></div>')
 add('<div class="gl-studio-meta"><span id="glanim-frame-info">' .. h(translate("No frames")) .. '</span>'
 	.. '<span class="gl-studio-links"><button type="button" class="gl-link" id="glanim-play">' .. h(translate("Pause")) .. '</button>'
 	.. '<button type="button" class="gl-link" id="glanim-reset">' .. h(translate("Reset crop")) .. '</button></span></div>')
@@ -662,6 +667,7 @@ local cfg_json = {
 		bgFrame = page_url("bg_frame"),
 		bgHistory = page_url("bg_history"),
 		bgRestore = page_url("bg_restore"),
+		bgDelete = page_url("bg_delete"),
 		download = page_url("download"),
 		mask = page_url("mask"),
 		blur = page_url("blur"),

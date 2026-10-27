@@ -11,7 +11,7 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.9.5-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
+`luci-app-glanim` **1.9.6-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
 
 ---
 
@@ -46,14 +46,14 @@
 
 ## 功能
 
-- **GIF 循环**：浏览器端解码 GIF，逐帧上传，最多 **300 帧**（按总像素预算自动降采样）；
-- **视频循环**：MP4(H.264) / WebM 在浏览器端逐帧提取，最多 **300 帧 / 60 秒**，选择 GIF 循环模式播放；
+- **GIF 循环**：浏览器端解码 GIF，逐帧上传，最多 **600 帧**（按总像素预算自动降采样）；
+- **视频循环**：MP4(H.264) / WebM 在浏览器端逐帧提取，最多 **600 帧 / 60 秒**，选择 GIF 循环模式播放；
 - **静态图片**：JPG / PNG / GIF / BMP，Cover / Contain / Stretch，1–3× 缩放；
 - **幻灯片**：多帧图片按顺序播放，停在最后一帧；
 - **系统面板**：时钟、CPU、内存、温度、网络、运行时长、IP，支持触摸翻页；
 - **自定义面板**：在 284×76 画布上自由摆放标签、数值、进度条、矩形、分隔线；
 - **背景媒体**：纯色 / 图片 / GIF / MP4 背景，布局元素绘制在背景之上；
-- **网页截图导入**：直接图片/GIF URL；网页链接可通过 WordPress mShots 生成 568×152 截图后导入；
+- **网页截图导入**：直接图片/GIF URL；网页链接可通过 WordPress mShots 生成 1280×960 截图后导入；
 - **背景裁剪**：可设置背景起始帧和帧数（默认 300），并显示约等于原片 mm:ss；
 - **最近背景**：保留最近 3 次上传的背景，可在“播放模式 1”中一键恢复；
 - **触摸拖动**：手指拖动时页面实时跟随，松手回中或按阈值翻页；
@@ -83,11 +83,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -173,7 +173,7 @@ uci commit glanim
 ### 视频
 
 - 支持 MP4(H.264) / WebM；
-- 浏览器逐帧提取，最多 **300 帧 / 60 秒**，默认 10 fps 采样；
+- 浏览器逐帧提取，最多 **600 帧 / 60 秒**，默认 10 fps 采样；
 - 选择 **GIF 循环** 模式即可循环播放；
 - 不处理音频；
 - H.265/HEVC 需先转 H.264 MP4 或 WebM。
@@ -182,7 +182,8 @@ uci commit glanim
 
 | 通道 | 上限 | 说明 |
 |---|---|---|
-| 浏览器 GIF / 视频 / 背景 | **300 帧** | 源图长边缩到 480px，按 24MP 总像素预算自动降采样 |
+| 浏览器 GIF / 视频帧包 | **600 帧** | 源图长边缩到 480px，按 24MP 总像素预算自动降采样 |
+| 自定义背景 | **300 帧** | 背景服务单独限制，保存时裁剪 |
 | PC 帧包 / 手动上传 | **600 帧** | 单帧 43168 字节，600 帧约 25.9 MB |
 | 上传包大小 | 32 MB | 控制器与 tar 包双重校验 |
 | 自定义布局元素 | 40 个 | 后端与守护进程双重裁剪 |
@@ -190,7 +191,7 @@ uci commit glanim
 ### 网页 / 图片 URL
 
 - 直接图片/GIF URL：路由器下载，浏览器解码，之后可裁剪、应用；
-- 网页链接：勾选“网页截图”，通过 WordPress mShots 生成 568×152 截图后导入；
+- 网页链接：勾选“网页截图”，通过 WordPress mShots 生成 1280×960 截图后导入；
 - 网页截图是**一次性导入**。
 
 > **没有实现完整的 HTML 渲染。** 路由器上跑浏览器内核需要数百 MB 存储/内存，持续渲染 CPU 开销很大，不适合常驻屏幕服务。若网页本身能输出监控图片（PNG/JPEG），把图片 URL 当背景/帧包使用即可。
@@ -225,7 +226,7 @@ uci commit glanim
 python build/build_ipk.py screen-custom
 ```
 
-产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.5-1_....ipk`
+产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_....ipk`
 
 结构：
 

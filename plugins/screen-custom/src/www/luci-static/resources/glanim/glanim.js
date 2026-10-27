@@ -19,10 +19,10 @@
   var customSelected = -1;
   var CUSTOM_BG = null;
 
-  var MAX_FRAMES = 300;              // browser-decoded GIF / video / background
+  var MAX_FRAMES = 600;              // browser-decoded GIF / video / background
   var MAX_DECODE_PIXELS = 24000000;  // total decoded RGBA pixels across all frames
   var MAX_SOURCE_SIDE = 480;         // long side of the decoded source frames
-  var MAX_VIDEO_FRAMES = 300;        // a 60 s video at 10 fps is sampled to <=300
+  var MAX_VIDEO_FRAMES = 600;        // a 60 s video at 10 fps is sampled to <=600
   var MAX_VIDEO_SECONDS = 60;
   var VIDEO_FPS = 10;
   var STAGE_W = 560;
@@ -251,7 +251,7 @@
       manifest: ZH ? "无效帧包：缺少或无法解析 manifest.json。" : "Invalid pack: missing or unreadable manifest.json.",
       badframe: ZH ? "无效帧包：存在不是 76×284 RGB565（43168 字节）的帧。" : "Invalid pack: a frame is not 76×284 RGB565 (43168 bytes).",
       badname: ZH ? "无效帧包：帧文件名不合法或重复。" : "Invalid pack: unsafe or duplicate frame filename.",
-      toomany: ZH ? "帧数超过上限（300 帧）。" : "Too many frames (limit 300).",
+      toomany: ZH ? "帧数超过上限（600 帧）。" : "Too many frames (limit 600).",
       toobig: ZH ? "文件超过大小上限。" : "File exceeds the size limit.",
       unsafe: ZH ? "帧包包含不安全的路径，已拒绝。" : "The pack contains an unsafe path and was rejected.",
       install: ZH ? "写入帧目录失败；旧帧包已保留。" : "Could not write the frame directory; the old pack was kept.",
@@ -1061,6 +1061,26 @@
             a.textContent = ZH ? "下载" : "Download";
             item.appendChild(a);
           }
+          if (URLS.bgDelete) {
+            var del = document.createElement("button");
+            del.type = "button";
+            del.className = "gl-bg-history-del";
+            del.textContent = ZH ? "删除" : "Delete";
+            del.addEventListener("click", function () {
+              if (!window.confirm(ZH ? "删除这个历史背景？" : "Delete this saved background?")) return;
+              del.disabled = true;
+              api(URLS.bgDelete, { method: "POST", body: formBody({ slot: String(it.slot) }) })
+                .then(function () {
+                  toast(ZH ? "已删除" : "Deleted", "ok");
+                  loadBgHistory();
+                })
+                .catch(function (err) {
+                  del.disabled = false;
+                  toast(err.message || "delete failed", "error");
+                });
+            });
+            item.appendChild(del);
+          }
           slots.appendChild(item);
         });
         box.hidden = false;
@@ -1394,6 +1414,7 @@
     setText("glanim-bg-mask-val", String(S.bgMask));
     el = $("gl-loop"); if (el) el.checked = S.loop;
     el = $("gl-fps"); if (el) el.value = S.fps;
+    el = $("gl-fps-number"); if (el) el.value = S.fps;
     setText("gl-fps-val", S.fps === 0 ? (ZH ? "原生" : "native") : (S.fps + " fps"));
     el = $("gl-auto-rotate"); if (el) el.checked = S.autoRotate;
     el = $("gl-dash-interval"); if (el) el.value = S.interval;
@@ -1597,7 +1618,7 @@
     var custom = $("glanim-panel-custom");
     var playback = S.mode === "gif" || S.mode === "still" || S.mode === "slideshow";
     if (dash) dash.style.display = S.mode === "dashboard" ? "" : "none";
-    if (play) play.style.display = playback ? "" : "none";
+    if (play) play.style.display = "";
     if (studio) studio.style.display = "";
     if (custom) {
       custom.hidden = S.mode !== "custom";
@@ -1732,7 +1753,7 @@
   var studio = {
     frames: [],
     cur: 0,
-    fit: "cover",
+    fit: "contain",
     zoom: 1,
     offX: 0,
     offY: 0,
@@ -1791,10 +1812,29 @@
     var oy = (PANEL_H - r.dh) / 2 + studio.offY * (PANEL_H / STAGE_H);
     pctx.imageSmoothingEnabled = true;
     pctx.drawImage(canvas, ox, oy, r.dw, r.dh);
+    // Simulate the panel's RGB565 output in the backend preview.
+    var img = pctx.getImageData(0, 0, PANEL_W, PANEL_H);
+    var data = img.data;
+    for (var i = 0; i < data.length; i += 4) {
+      var c = ((data[i] & 0xF8) << 8) | ((data[i + 1] & 0xFC) << 3) | (data[i + 2] >> 3);
+      data[i] = ((c >> 11) & 31) * 255 / 31;
+      data[i + 1] = ((c >> 5) & 63) * 255 / 63;
+      data[i + 2] = (c & 31) * 255 / 31;
+    }
+    pctx.putImageData(img, 0, 0);
+  }
+
+  function syncStudioOffsets() {
+    var x = $("glanim-pos-x"), y = $("glanim-pos-y");
+    if (x) x.value = String(clamp(Math.round(studio.offX), -280, 280));
+    if (y) y.value = String(clamp(Math.round(studio.offY), -84, 84));
+    setText("glanim-pos-x-val", String(Math.round(studio.offX)));
+    setText("glanim-pos-y-val", String(Math.round(studio.offY)));
   }
 
   function placeStudio() {
     studioEls();
+    syncStudioOffsets();
     var fr = currentFrame();
     var empty = $("glanim-stage-empty");
     if (empty) empty.className = "gl-stage-empty" + (fr ? " is-off" : "");
@@ -1916,9 +1956,14 @@
     studio.offX = 0;
     studio.offY = 0;
     studio.zoom = 1;
+    studio.fit = "contain";
+    document.querySelectorAll(".gl-fit").forEach(function (b) {
+      b.className = "gl-fit" + (b.getAttribute("data-fit") === "contain" ? " is-active" : "");
+    });
     var zoom = $("glanim-zoom");
     if (zoom) zoom.value = "1";
     setText("glanim-zoom-val", "1.00×");
+    syncStudioOffsets();
   }
 
   function handleImageFile(file) {
@@ -2016,9 +2061,15 @@
       var fps = VIDEO_FPS;
       var count = Math.max(1, Math.min(MAX_VIDEO_FRAMES, Math.min(MAX_FRAMES, Math.round(useDur * fps))));
       var step = useDur / count;
+      var srcW = video.videoWidth || PANEL_W;
+      var srcH = video.videoHeight || PANEL_H;
+      // Keep more source detail for short clips so the crop preview stays
+      // sharp when zoomed. Long packs fall back to the 480 px budget.
+      var sideCap = count <= 200 ? 960 : MAX_SOURCE_SIDE;
+      var srcScale = Math.min(1, sideCap / Math.max(srcW, srcH));
       var canvas = document.createElement("canvas");
-      canvas.width = PANEL_W;
-      canvas.height = PANEL_H;
+      canvas.width = Math.max(1, Math.round(srcW * srcScale));
+      canvas.height = Math.max(1, Math.round(srcH * srcScale));
       var ctx = canvas.getContext("2d");
       var frames = [];
       var i = 0;
@@ -2041,18 +2092,13 @@
           if (handled) return;
           handled = true;
           try {
-            var sw = video.videoWidth || PANEL_W;
-            var sh = video.videoHeight || PANEL_H;
-            var scale = Math.max(PANEL_W / sw, PANEL_H / sh);
-            var dw = sw * scale;
-            var dh = sh * scale;
             ctx.fillStyle = "#000";
-            ctx.fillRect(0, 0, PANEL_W, PANEL_H);
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.imageSmoothingEnabled = true;
-            ctx.drawImage(video, (PANEL_W - dw) / 2, (PANEL_H - dh) / 2, dw, dh);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             var fc = document.createElement("canvas");
-            fc.width = PANEL_W;
-            fc.height = PANEL_H;
+            fc.width = canvas.width;
+            fc.height = canvas.height;
             fc.getContext("2d").drawImage(canvas, 0, 0);
             frames.push({ canvas: fc, delay: clamp(Math.round(step * 1000), 30, 1000) });
           } catch (e) {
@@ -2109,7 +2155,7 @@
     var shot = $("glanim-url-shot");
     var target = raw;
     if (shot && shot.checked) {
-      target = "https://s0.wp.com/mshots/v1/" + encodeURIComponent(raw) + "?w=568&h=152";
+      target = "https://s0.wp.com/mshots/v1/" + encodeURIComponent(raw) + "?w=1280&h=960";
     }
     if (!URLS.fetchUrl) {
       setMsg(ZH ? "后端缺少 URL 代理接口" : "URL proxy endpoint is missing", "error");
@@ -2961,12 +3007,20 @@
     });
 
     var fps = $("gl-fps");
-    if (fps) fps.addEventListener("input", function () {
-      S.fps = num(fps.value, 0);
+    var fpsNumber = $("gl-fps-number");
+    function applyFps(value) {
+      S.fps = clamp(num(value, 0), 0, 50);
+      if (fps) fps.value = S.fps;
+      if (fpsNumber) fpsNumber.value = S.fps;
       setText("gl-fps-val", S.fps === 0 ? (ZH ? "原生" : "native") : (S.fps + " fps"));
       setDirty(true);
       startPackTimer();
-    });
+    }
+    if (fps) fps.addEventListener("input", function () { applyFps(fps.value); });
+    if (fpsNumber) {
+      fpsNumber.addEventListener("input", function () { applyFps(fpsNumber.value); });
+      fpsNumber.addEventListener("change", function () { applyFps(fpsNumber.value); });
+    }
 
     var interval = $("gl-dash-interval");
     if (interval) interval.addEventListener("input", function () {
@@ -3118,6 +3172,18 @@
     if (zoom) zoom.addEventListener("input", function () {
       studio.zoom = parseFloat(zoom.value) || 1;
       setText("glanim-zoom-val", studio.zoom.toFixed(2) + "×");
+      placeStudio();
+    });
+    var posX = $("glanim-pos-x");
+    if (posX) posX.addEventListener("input", function () {
+      studio.offX = num(posX.value, 0);
+      setText("glanim-pos-x-val", String(Math.round(studio.offX)));
+      placeStudio();
+    });
+    var posY = $("glanim-pos-y");
+    if (posY) posY.addEventListener("input", function () {
+      studio.offY = num(posY.value, 0);
+      setText("glanim-pos-y-val", String(Math.round(studio.offY)));
       placeStudio();
     });
 

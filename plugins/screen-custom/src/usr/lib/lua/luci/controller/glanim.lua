@@ -214,6 +214,7 @@ function index()
 	entry({"admin", "services", "glanim", "page"}, call("action_page")).leaf = true
 	entry({"admin", "services", "glanim", "bg_history"}, call("action_bg_history")).leaf = true
 	entry({"admin", "services", "glanim", "bg_restore"}, call("action_bg_restore")).leaf = true
+	entry({"admin", "services", "glanim", "bg_delete"}, call("action_bg_delete")).leaf = true
 	entry({"admin", "services", "glanim", "download"}, call("action_download")).leaf = true
 	entry({"admin", "services", "glanim", "openclash"}, call("action_openclash")).leaf = true
 	entry({"admin", "services", "glanim", "fetch_url"}, call("action_fetch_url")).leaf = true
@@ -611,7 +612,7 @@ function action_save()
 	local touch_action = luci.http.formvalue("touch_action") or "next"
 	if not TOUCH_ACTIONS[touch_action] then touch_action = "next" end
 
-	local fps = numv("fps", 0, 0, 30)
+	local fps = numv("fps", 0, 0, 50)
 	local brightness = numv("brightness", 4, 0, 11)
 	local dash_interval = numv("dash_interval", 5, 2, 30)
 	local auto_rotate = boolv("auto_rotate", true)
@@ -1016,6 +1017,23 @@ function action_bg_history()
 	end
 	return json_reply({ ok = true, slots = slots })
 end
+
+function action_bg_delete()
+	local sys = require "luci.sys"
+	local slot = tonumber(luci.http.formvalue("slot")) or 0
+	if slot < 1 or slot > 3 then
+		return json_reply({ ok = false, error = "bad_slot" }, 400)
+	end
+	sys.call("rm -rf " .. BG_HISTORY_DIR .. "/" .. slot)
+	if slot == 1 then
+		sys.call("mv " .. BG_HISTORY_DIR .. "/2 " .. BG_HISTORY_DIR .. "/1 2>/dev/null")
+		sys.call("mv " .. BG_HISTORY_DIR .. "/3 " .. BG_HISTORY_DIR .. "/2 2>/dev/null")
+	elseif slot == 2 then
+		sys.call("mv " .. BG_HISTORY_DIR .. "/3 " .. BG_HISTORY_DIR .. "/2 2>/dev/null")
+	end
+	return json_reply({ ok = true })
+end
+
 
 function action_bg_restore()
 	local sys = require "luci.sys"

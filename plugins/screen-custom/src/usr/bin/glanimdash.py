@@ -2037,7 +2037,7 @@ def _fast_effect_lut(blur, dim):
     lut = _FAST_EFFECTS.get(key)
     if lut is not None:
         return lut
-    a = 0.28 * key[0] / 100.0
+    a = min(0.20, 0.02 + 0.12 * key[0] / 100.0)
     d = key[1] / 100.0
     lut = array.array("H", [0]) * 65536
     for c in range(65536):
@@ -2062,49 +2062,34 @@ def fast_effect(data, blur, dim):
 
 
 def frost_fb(data, blur, quality=False):
-    """Frost an RGB565 frame.
+    """Fast block-frost for RGB565 frames.
 
-    Animated backgrounds use a cheap white-glass LUT so the frame loop stays
-    smooth. A single-frame background can afford the real block blur.
+    Row-wise nearest-block sampling keeps the Python cost low enough for
+    animated backgrounds while preserving a real frosted-glass appearance,
+    not a flat grey overlay.
     """
     if blur <= 0:
         return bytes(data)
-    if not quality:
-        lut = _frost_tint_lut(blur)
-        vals = array.array("H")
-        vals.frombytes(data)
-        return array.array("H", (lut[v] for v in vals)).tobytes()
-    block = 1 + int(blur / 100.0 * 8)
-    if block <= 1:
-        return bytes(data)
-    out = bytearray(len(data))
-    tint = 0.10 * blur / 100.0
+    block = max(4, min(8, 2 + int(round(blur / 100.0 * 6))))
+    lut = _frost_tint_lut(blur)
+    vals = array.array("H")
+    vals.frombytes(data[:FB_BYTES])
+    out = bytearray(FB_BYTES)
+    row_bytes = FB_W * 2
     for by in range(0, FB_H, block):
-        y2 = min(FB_H, by + block)
+        sy = min(FB_H - 1, by + block // 2)
+        base = sy * FB_W
+        row = bytearray(row_bytes)
+        pos = 0
         for bx in range(0, FB_W, block):
-            x2 = min(FB_W, bx + block)
-            rr = gg = bb = n = 0
-            for y in range(by, y2):
-                base = y * FB_W
-                for x in range(bx, x2):
-                    bi = (base + x) * 2
-                    c = data[bi] | (data[bi + 1] << 8)
-                    rr += (c >> 11) & 31
-                    gg += (c >> 5) & 63
-                    bb += c & 31
-                    n += 1
-            if not n:
-                continue
-            rc = int(rr / n); gc = int(gg / n); bc = int(bb / n)
-            if tint:
-                rc = int(rc * (1 - tint) + 31 * tint)
-                gc = int(gc * (1 - tint) + 63 * tint)
-                bc = int(bc * (1 - tint) + 31 * tint)
-            c = (rc << 11) | (gc << 5) | bc
-            pair = bytes((c & 255, (c >> 8) & 255)) * (x2 - bx)
-            for y in range(by, y2):
-                base = (y * FB_W + bx) * 2
-                out[base:base + len(pair)] = pair
+            sx = min(FB_W - 1, bx + block // 2)
+            c = lut[vals[base + sx]]
+            pair = bytes((c & 255, (c >> 8) & 255))
+            n = min(block, FB_W - bx)
+            row[pos:pos + n * 2] = pair * n
+            pos += n * 2
+        nrows = min(block, FB_H - by)
+        out[by * row_bytes:(by + nrows) * row_bytes] = bytes(row) * nrows
     return bytes(out)
 
 
@@ -3305,7 +3290,7 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                         overlay_key = key
                     dim_key = (fi, int(canvas.bg_dim * 100), int(blur_now))
                     if dim_key not in bg_fb_cache:
-                        if len(bg_sources) == 1 and blur_now > 0:
+                        if blur_now > 0:
                             base = frost_fb(raw, blur_now, quality=True)
                             bg_fb_cache[dim_key] = dim_fb(base, canvas.bg_dim)
                         else:

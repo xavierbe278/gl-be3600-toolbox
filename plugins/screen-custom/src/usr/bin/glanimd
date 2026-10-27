@@ -259,8 +259,23 @@ set_brightness(cfg["brightness"])
 
 frame_count = len(frames)
 idx = 0
+frame_cache = {}
+cache_limit = 64 * 1024 * 1024
+if frame_count * FB_BYTES <= cache_limit:
+    for i, fr in enumerate(frames):
+        try:
+            with open(fr["path"], "rb") as f:
+                data = f.read()
+            if len(data) == FB_BYTES:
+                frame_cache[i] = data
+        except Exception:
+            pass
 write_status(frame_count=frame_count, current=0,
              source=meta.get("source", ""))
+
+fps = max(1, min(50, int(cfg["fps"]))) if int(cfg["fps"]) > 0 else 0
+last_status_at = 0.0
+next_frame_at = time.monotonic()
 
 try:
     last_live_bright = int(cfg["brightness"])
@@ -275,8 +290,12 @@ try:
             pass
         fr = frames[idx]
         try:
-            with open(fr["path"], "rb") as f:
-                data = f.read()
+            data = frame_cache.get(idx)
+            if data is None:
+                with open(fr["path"], "rb") as f:
+                    data = f.read()
+                if len(data) == FB_BYTES and frame_count * FB_BYTES <= cache_limit:
+                    frame_cache[idx] = data
             if len(data) == FB_BYTES:
                 os.lseek(fb, 0, os.SEEK_SET)
                 os.write(fb, data)
@@ -286,14 +305,17 @@ try:
         except Exception as e:
             write_status(error=str(e))
 
-        write_status(current=idx, frame_count=frame_count)
+        now = time.monotonic()
+        if now - last_status_at >= 0.5:
+            write_status(current=idx, frame_count=frame_count)
+            last_status_at = now
 
         if cfg["mode"] == "still":
-            delay_ms = 500
-        elif cfg["fps"] > 0:
-            delay_ms = 1000 // cfg["fps"]
+            delay = 0.5
+        elif fps > 0:
+            delay = 1.0 / fps
         else:
-            delay_ms = fr["delay"]
+            delay = max(0.01, float(fr["delay"]) / 1000.0)
 
         if cfg["mode"] != "still":
             idx += 1
@@ -305,7 +327,13 @@ try:
                 else:
                     idx = 0
 
-        time.sleep(delay_ms / 1000.0)
+        next_frame_at += delay
+        remaining = next_frame_at - time.monotonic()
+        if remaining > 0:
+            time.sleep(remaining)
+        else:
+            # Do not try to catch up in a burst after a slow frame.
+            next_frame_at = time.monotonic()
 except Exception as e:
     write_status(running="0", error=str(e))
 finally:

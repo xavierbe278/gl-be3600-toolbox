@@ -11,7 +11,7 @@ Author: **@xavierbe278** · GitHub: [gl-be3600-toolbox](https://github.com/xavie
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.9.5-1** — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
+`luci-app-glanim` **1.9.6-1** — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
 
 ---
 
@@ -44,8 +44,8 @@ Panel pages:
 
 ## Features
 
-- **GIF loop** — decoded in the browser and uploaded as RGB565 frames; up to **300 frames** (automatic downscale under a pixel budget);
-- **Video loop** — MP4(H.264) / WebM is sampled in the browser; up to **300 frames / 60 s**, played back by selecting the GIF loop mode;
+- **GIF loop** — decoded in the browser and uploaded as RGB565 frames; up to **600 frames** (automatic downscale under a pixel budget);
+- **Video loop** — MP4(H.264) / WebM is sampled in the browser; up to **600 frames / 60 s**, played back by selecting the GIF loop mode;
 - **Still image** — JPG / PNG / GIF / BMP, Cover / Contain / Stretch, 1–3× zoom;
 - **Slideshow** — frames play once and stop on the last frame;
 - **Dashboard** — clock, CPU, memory, temperature, network, uptime, IP; touch paging;
@@ -81,11 +81,11 @@ Other firmware versions or panel batches may need adjustments.
 ## Install
 
 ```sh
-scp releases/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.5-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -167,7 +167,7 @@ uci commit glanim
 ### Video
 
 - MP4(H.264) / WebM;
-- Browser-side frame extraction, up to **300 frames / 60 s**, sampled at 10 fps;
+- Browser-side frame extraction, up to **600 frames / 60 s**, sampled at 10 fps;
 - Select **GIF loop** mode to play it;
 - Audio is ignored;
 - H.265/HEVC must be converted to H.264 MP4 or WebM first.
@@ -176,7 +176,8 @@ uci commit glanim
 
 | Channel | Limit | Notes |
 |---|---|---|
-| Browser GIF / video / background | **300 frames** | Source long side ≤480 px; adaptive downscale under a 24 MP budget |
+| Browser GIF / video frames | **600 frames** | Source long side ≤480 px; adaptive downscale under a 24 MP budget |
+| Custom background | **300 frames** | Separate background limit, trimmed on save |
 | PC pack / manual upload | **600 frames** | 43,168 bytes per frame; ~25.9 MB for 600 frames |
 | Upload size | 32 MB | Controller and tar validation |
 | Custom layout elements | 40 | Clamped by controller and daemon |
@@ -184,7 +185,7 @@ uci commit glanim
 ### Webpage / image URL
 
 - Direct image/GIF URL: downloaded by the router, decoded by the browser, cropped and applied;
-- Webpage URL: enable **web screenshot** to generate a 568×152 image via WordPress mShots;
+- Webpage URL: enable **web screenshot** to generate a 1280×960 image via WordPress mShots;
 - Webpage screenshots are a **one-shot import**.
 
 > **Full HTML rendering is not implemented.** Running a browser engine on the router would need hundreds of MB of storage/RAM and significant CPU, which is not suitable for an always-on screen service. If the page can expose a monitoring image (PNG/JPEG), use that image URL as a background or frame pack instead.
@@ -219,7 +220,7 @@ From the repository root:
 python build/build_ipk.py screen-custom
 ```
 
-Output: `plugins/screen-custom/releases/luci-app-glanim_1.9.5-1_....ipk`
+Output: `plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_....ipk`
 
 Layout:
 
