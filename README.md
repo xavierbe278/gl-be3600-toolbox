@@ -63,7 +63,7 @@ rm -f /tmp/luci-indexcache*
 
 | 插件 | 版本 | 安装包 | 中文说明 | English |
 |---|---|---|---|---|
-| 屏幕自定义 / Screen Custom | `1.9.6-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
+| 屏幕自定义 / Screen Custom | `1.9.11-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.11-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
 | 风扇控制 / Fan Control | `1.0.7-1` | [IPK](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
 
 - 屏幕插件源码与 PC 工具：[`plugins/screen-custom/`](plugins/screen-custom/)
