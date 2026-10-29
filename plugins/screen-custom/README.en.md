@@ -11,7 +11,7 @@ Author: **@xavierbe278** · GitHub: [gl-be3600-toolbox](https://github.com/xavie
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.9.6-1** — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
+`luci-app-glanim` — frame packs / GIF / images, live dashboard, OpenClash status/details/node, visual custom layout for the GL-BE3600 284×76 ST7789 bar panel, with an optional GL.iNet gl-ui bridge.
 
 ---
 
