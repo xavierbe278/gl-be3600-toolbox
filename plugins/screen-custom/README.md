@@ -11,7 +11,7 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.9.6-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
+`luci-app-glanim`：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
 
 ---
 
