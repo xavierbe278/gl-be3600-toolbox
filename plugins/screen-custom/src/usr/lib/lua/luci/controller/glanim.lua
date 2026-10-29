@@ -529,6 +529,7 @@ local CUSTOM_SOURCES = {
 local function sanitize_layout(l)
 	if type(l) ~= "table" or type(l.elements) ~= "table" then return nil end
 	local out = {
+		name = tostring(l.name or "PAGE"):sub(1, 20),
 		bg = hex_color(l.bg, "#0a0c12"),
 		elements = {},
 	}
@@ -619,8 +620,7 @@ function action_save()
 	local bg_mask = numv("bg_mask", 20, 0, 100)
 	local bg_blur = numv("bg_blur", 0, 0, 100)
 	local content_alpha = numv("content_alpha", 100, 0, 100)
-	local menu_lang = luci.http.formvalue("menu_lang") or "auto"
-	if menu_lang ~= "zh" and menu_lang ~= "en" then menu_lang = "auto" end
+	local menu_lang = "auto"
 	local menu_pages = math.max(2, math.min(3, tonumber(luci.http.formvalue("menu_pages")) or 2))
 	local menu_page1 = clean_menu(luci.http.formvalue("menu_page1") or "")
 	local menu_page2 = clean_menu(luci.http.formvalue("menu_page2") or "")
@@ -639,6 +639,25 @@ function action_save()
 		end
 		custom_layout = sanitize_layout(parsed)
 		if not custom_layout then return fail_reply("bad_layout", 400) end
+	end
+
+	local pages_text = luci.http.formvalue("custom_pages") or ""
+	local custom_pages = nil
+	if pages_text ~= "" then
+		if #pages_text > 60000 then return fail_reply("bad_layout", 400) end
+		local ok, parsed = pcall(json_lib().parse, pages_text)
+		if not ok or type(parsed) ~= "table" or #parsed < 1 or #parsed > 8 then
+			return fail_reply("bad_layout", 400)
+		end
+		custom_pages = {}
+		for i = 1, #parsed do
+			local page = sanitize_layout(parsed[i])
+			if not page then return fail_reply("bad_layout", 400) end
+			custom_pages[#custom_pages + 1] = page
+		end
+		custom_layout = custom_pages[1]
+	elseif custom_layout then
+		custom_pages = { custom_layout }
 	end
 
 	if enabled == "1" then
@@ -701,6 +720,9 @@ function action_save()
 	uci:set("glanim", "globals", "touch_flip_x", touch_flip_x)
 	if custom_layout then
 		uci:set("glanim", "globals", "custom_layout", json_lib().stringify(custom_layout))
+	end
+	if custom_pages then
+		uci:set("glanim", "globals", "custom_pages", json_lib().stringify(custom_pages))
 	end
 	uci:commit("glanim")
 

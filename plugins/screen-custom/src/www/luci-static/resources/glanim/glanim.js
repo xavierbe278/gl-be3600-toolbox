@@ -18,6 +18,13 @@
   var FONT_MODE = "classic";
   var customSelected = -1;
   var CUSTOM_BG = null;
+  var CUSTOM_PAGES = (Array.isArray(CFG.customPages) ? clone(CFG.customPages) : []).filter(function (p) {
+    return p && Array.isArray(p.elements) && p.elements.length;
+  });
+  if (!CUSTOM_PAGES.length) CUSTOM_PAGES = [clone(CUSTOM)];
+  var customPage = 0;
+  if (!CUSTOM || !Array.isArray(CUSTOM.elements)) CUSTOM = clone(CUSTOM_PAGES[0]);
+  if (CUSTOM_PAGES.length) CUSTOM = clone(CUSTOM_PAGES[0]);
 
   var MAX_FRAMES = 600;              // browser-decoded GIF / video / background
   var MAX_DECODE_PIXELS = 24000000;  // total decoded RGBA pixels across all frames
@@ -442,13 +449,7 @@
       }
     }
 
-    var packBadge = $("glanim-pack-badge");
-    if (packBadge && !PACK.valid) {
-      packBadge.className = "gl-badge" + (PACK.count > 0 ? " warn" : "");
-      packBadge.textContent = PACK.count > 0
-        ? (ZH ? "帧包不完整" : "Pack incomplete")
-        : (ZH ? "无帧包" : "No pack");
-    }
+    updatePlaybackContent();
   }
 
   /* ---------------- panel preview ---------------- */
@@ -1611,11 +1612,43 @@
     });
   }
 
+  function updatePlaybackContent() {
+    var isPlayback = S.mode === "gif" || S.mode === "still" || S.mode === "slideshow";
+    var frames = num((CFG.customBg || {}).frames, 0);
+    var showBg = !isPlayback && frames > 0;
+    var framePack = $("glanim-frame-pack");
+    var bgRow = $("glanim-pp-bg");
+    var badge = $("glanim-pack-badge");
+    if (framePack) {
+      framePack.hidden = !isPlayback;
+      framePack.style.display = isPlayback ? "" : "none";
+    }
+    if (bgRow) {
+      bgRow.hidden = !showBg;
+      bgRow.style.display = showBg ? "" : "none";
+    }
+    if (badge) {
+      if (showBg) {
+        badge.className = "gl-badge ok";
+        badge.textContent = ZH ? "自定义背景" : "Custom background";
+      } else if (PACK.valid) {
+        badge.className = "gl-badge";
+        badge.textContent = ZH ? "帧包就绪" : "Pack ready";
+      } else {
+        badge.className = "gl-badge" + (PACK.count > 0 ? " warn" : "");
+        badge.textContent = PACK.count > 0
+          ? (ZH ? "帧包不完整" : "Pack incomplete")
+          : (ZH ? "无帧包" : "No pack");
+      }
+    }
+  }
+
   function syncPanels() {
     var dash = $("glanim-panel-dashboard");
     var play = $("glanim-panel-playback");
     var studio = $("glanim-panel-studio");
     var custom = $("glanim-panel-custom");
+    var pages = $("glanim-panel-pages");
     var playback = S.mode === "gif" || S.mode === "still" || S.mode === "slideshow";
     if (dash) dash.style.display = S.mode === "dashboard" ? "" : "none";
     if (play) play.style.display = "";
@@ -1624,6 +1657,11 @@
       custom.hidden = S.mode !== "custom";
       custom.style.display = S.mode === "custom" ? "" : "none";
     }
+    if (pages) {
+      pages.hidden = S.mode !== "custom";
+      pages.style.display = S.mode === "custom" ? "" : "none";
+    }
+    updatePlaybackContent();
     if (S.mode === "custom") {
       drawCustomEditor();
       renderCustomPalette();
@@ -1658,7 +1696,26 @@
     tabs.hidden = visible === 0;
   }
 
+  function pagesFromBox() {
+    var box = $("glanim-pages-json");
+    if (!box) return null;
+    var raw = String(box.value || "").trim();
+    if (!raw) return null;
+    try {
+      var pages = JSON.parse(raw);
+      if (!Array.isArray(pages) || !pages.length) return null;
+      pages = pages.filter(function (p) {
+        return p && Array.isArray(p.elements) && p.elements.length;
+      });
+      return pages.length ? pages.slice(0, 8) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function collect() {
+    storeCustomPage();
+    var pages = pagesFromBox() || CUSTOM_PAGES;
     return {
       enabled: S.enabled ? "1" : "0",
       mode: S.mode,
@@ -1688,7 +1745,8 @@
       menu_page1: S.menuPage1,
       menu_page2: S.menuPage2,
       menu_page3: S.menuPage3,
-      custom_layout: JSON.stringify(CUSTOM)
+      custom_layout: JSON.stringify(pages[0] || CUSTOM),
+      custom_pages: JSON.stringify(pages)
     };
   }
 
@@ -1705,6 +1763,14 @@
     if (S.mode === "custom" && (!CUSTOM.elements || CUSTOM.elements.length === 0)) {
       toast(ZH ? "自定义面板至少需要一个元素" : "Add at least one element to the custom panel", "error");
       return false;
+    }
+    var pagesBox = $("glanim-pages-json");
+    if (pagesBox && String(pagesBox.value || "").trim() !== "") {
+      var parsedPages = pagesFromBox();
+      if (!parsedPages) {
+        toast(ZH ? "自定义页面 JSON 无效，至少需要一个含 elements 的页面" : "Invalid custom pages JSON; at least one page with elements is required", "error");
+        return false;
+      }
     }
     if (S.enabled && (S.mode === "gif" || S.mode === "still" || S.mode === "slideshow") && PACK.count <= 0) {
       toast(ZH ? "请先上传帧包，再启用该播放模式" : "Upload a frame pack before enabling this mode", "error");
@@ -2552,6 +2618,59 @@
     return customCanvasCtx;
   }
 
+  function storeCustomPage() {
+    if (CUSTOM_PAGES[customPage]) CUSTOM_PAGES[customPage] = clone(CUSTOM);
+  }
+
+  function renderCustomPageSelect() {
+    var sel = $("glanim-custom-page");
+    if (!sel) return;
+    sel.innerHTML = "";
+    CUSTOM_PAGES.forEach(function (page, i) {
+      var o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = (page && page.name) || ("PAGE " + (i + 1));
+      sel.appendChild(o);
+    });
+    sel.value = String(customPage);
+  }
+
+  function switchCustomPage(index) {
+    index = clamp(index, 0, Math.max(0, CUSTOM_PAGES.length - 1));
+    if (index === customPage) return;
+    storeCustomPage();
+    customPage = index;
+    CUSTOM = clone(CUSTOM_PAGES[customPage] || defaultCustomLayout());
+    customSelected = -1;
+    setDirty(true);
+    renderCustomPageSelect();
+    var template = $("glanim-custom-template");
+    if (template) template.value = "custom";
+    drawCustomEditor();
+    drawPreview();
+    renderCustomInspector();
+    renderCustomPageSelect();
+  }
+
+  function addCustomPage() {
+    if (CUSTOM_PAGES.length >= 8) {
+      toast(ZH ? "最多 8 个自定义页面" : "Up to 8 custom pages", "error");
+      return;
+    }
+    storeCustomPage();
+    var page = clone(customTemplates().status);
+    page.name = "PAGE " + (CUSTOM_PAGES.length + 1);
+    CUSTOM_PAGES.push(page);
+    customPage = CUSTOM_PAGES.length - 1;
+    CUSTOM = clone(page);
+    customSelected = -1;
+    setDirty(true);
+    drawCustomEditor();
+    drawPreview();
+    renderCustomInspector();
+    renderCustomPageSelect();
+  }
+
   function customTemplates() {
     return {
       status: defaultCustomLayout(),
@@ -2625,6 +2744,11 @@
       selected: customSelected,
       grid: true
     });
+    var box = $("glanim-pages-json");
+    if (box && document.activeElement !== box) {
+      storeCustomPage();
+      box.value = JSON.stringify(CUSTOM_PAGES, null, 2);
+    }
   }
 
   function renderCustomPalette() {
@@ -2678,7 +2802,7 @@
     var host = $("glanim-custom-inspector");
     var label = $("glanim-custom-selected-label");
     if (!host) return;
-    var el = CUSTOM.elements[customSelected];
+    var el = (CUSTOM && Array.isArray(CUSTOM.elements)) ? CUSTOM.elements[customSelected] : null;
     if (!el) {
       host.innerHTML = '<div class="gl-custom-empty">'
         + (ZH ? "在上方画布中选择一个元素，或从右侧数据面板添加。" : "Select an element on the canvas, or add one from the data palette.")
@@ -2805,6 +2929,44 @@
   }
 
   function bindCustomEditor() {
+    var pageSel = $("glanim-custom-page");
+    renderCustomPageSelect();
+    if (pageSel) pageSel.addEventListener("change", function () {
+      switchCustomPage(num(pageSel.value, 0));
+    });
+    var addPage = $("glanim-custom-add-page");
+    if (addPage) addPage.addEventListener("click", addCustomPage);
+
+    var pagesBox = $("glanim-pages-json");
+    if (pagesBox) {
+      pagesBox.value = JSON.stringify(CUSTOM_PAGES, null, 2);
+      pagesBox.addEventListener("input", function () {
+        setDirty(true);
+        var pages = pagesFromBox();
+        if (!pages) return;
+        CUSTOM_PAGES = pages;
+        customPage = clamp(customPage, 0, CUSTOM_PAGES.length - 1);
+        CUSTOM = clone(CUSTOM_PAGES[customPage] || defaultCustomLayout());
+        customSelected = -1;
+        renderCustomPageSelect();
+        drawCustomEditor();
+        drawPreview();
+        renderCustomInspector();
+      });
+    }
+    var pagesTemplate = $("glanim-pages-template");
+    var pagesInsert = $("glanim-pages-insert");
+    if (pagesInsert) pagesInsert.addEventListener("click", function () {
+      var t = customTemplates()[(pagesTemplate && pagesTemplate.value) || "status"] || customTemplates().status;
+      t = clone(t);
+      t.name = "PAGE 1";
+      if (pagesBox) {
+        pagesBox.value = JSON.stringify([t], null, 2);
+        setDirty(true);
+        pagesBox.dispatchEvent(new Event("input"));
+      }
+    });
+
     customCtx();
     renderCustomPalette();
     drawCustomEditor();
@@ -3226,6 +3388,10 @@
     if (bgDl) bgDl.addEventListener("click", function (ev) { ev.preventDefault(); if (URLS.download) window.location.href = URLS.download + "?type=bg&_=" + Date.now(); });
     var clearBg = $("glanim-clear-bg");
     if (clearBg) clearBg.addEventListener("click", clearBackground);
+    var bgDlPp = $("glanim-pp-bg-download");
+    if (bgDlPp) bgDlPp.addEventListener("click", function (ev) { ev.preventDefault(); if (URLS.download) window.location.href = URLS.download + "?type=bg&_=" + Date.now(); });
+    var clearBgPp = $("glanim-pp-bg-clear");
+    if (clearBgPp) clearBgPp.addEventListener("click", clearBackground);
 
     if (stage) {
       stage.addEventListener("pointerdown", function (ev) {

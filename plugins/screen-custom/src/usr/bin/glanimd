@@ -59,6 +59,17 @@ def _custom_layout():
         return {}
 
 
+def _custom_pages():
+    raw = uci_get("custom_pages", "")
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, list) else []
+    except Exception:
+        return []
+
+
 def load_config():
     return {
         "mode": uci_get("mode", "gif"),
@@ -87,6 +98,7 @@ def load_config():
         "touch_flip_x": _uci_bool("touch_flip_x", "1"),
         # custom panel layout (parsed JSON object)
         "custom_layout": _custom_layout(),
+        "custom_pages": _custom_pages(),
         "custom_bg_dir": uci_get("custom_bg_dir", "") or "/usr/share/glanim/custom_bg",
         "custom_bg_frames": int(uci_get("custom_bg_frames", "0") or 0),
         "custom_bg_fps": int(uci_get("custom_bg_fps", "8") or 8),

@@ -1229,13 +1229,14 @@ def make_custom_renderer(cfg):
     return render
 
 
-def render_custom(canvas, d, cfg, background=None):
-    """Render the user-defined layout stored in cfg['custom_layout'].
+def render_custom(canvas, d, cfg, background=None, layout=None):
+    """Render one user-defined layout.
 
     Every field is clamped again here: the layout is user JSON and must never
     be able to draw outside the 284x76 canvas or crash the daemon.
     """
-    layout = cfg.get("custom_layout")
+    if not isinstance(layout, dict):
+        layout = cfg.get("custom_layout")
     if not isinstance(layout, dict):
         layout = custom_default_layout()
     if background is not None:
@@ -1639,6 +1640,7 @@ def draw_country_flag(canvas, x, y, cc, scale=3):
 
 def render_clash_node(canvas, d, cfg):
     """Third OpenClash page: selected node, country, type and latency."""
+    lang = resolve_menu_lang(cfg.get("menu_lang", "auto"))
     canvas.clear(BG)
     running = bool(d.get("oc_running"))
     canvas.fill_rect(0, 0, PHYS_W, 1, (44, 52, 70))
@@ -1671,7 +1673,7 @@ def render_clash_node(canvas, d, cfg):
     nwhite, ngrey, nyellow = (255, 255, 255), (255, 255, 255), (255, 255, 0)
     canvas.draw_text(68, 19, cc, nyellow, 1)
     zh = COUNTRY_ZH.get(cc, "")
-    if zh:
+    if zh and lang == "zh":
         canvas.draw_cjk(68 + len(cc) * 6 + 6, 13, zh, nwhite, 1)
     canvas.draw_text(68, 31, node, nwhite, 1)
     gc = int(d.get("oc_group_count") or 0)
@@ -1694,7 +1696,14 @@ def render_clash_node(canvas, d, cfg):
 def build_pages(cfg):
     """Return ordered list of (key, render_fn) selected by the dashboard flags."""
     if cfg.get("mode") == "custom":
-        return [("custom", render_custom)]
+        layouts = cfg.get("custom_pages")
+        if not isinstance(layouts, list) or not layouts:
+            layouts = [cfg.get("custom_layout")]
+        out = []
+        for i, layout in enumerate(layouts[:8]):
+            out.append(("custom%d" % i,
+                        lambda canvas, d, cfg, layout=layout: render_custom(canvas, d, cfg, layout=layout)))
+        return out
     if cfg.get("mode") == "clash":
         return [("clash", render_clash), ("clash_info", render_clash_info),
                 ("clash_node", render_clash_node)]
@@ -1720,7 +1729,7 @@ MT_X, MT_Y = 57, 56
 EV_FMT = "=QQHHi"
 EVENT_SZ = struct.calcsize(EV_FMT)
 LONG_PRESS = 1.5
-TAP_MAX = 0.35
+TAP_MAX = 1.1
 
 # CST816X on this board does NOT emit BTN_TOUCH. Finger presence rides MT_X(57):
 # 0 = down / tracking, -1 = lifted. The driver swaps axes: the real horizontal
@@ -2299,8 +2308,6 @@ def draw_menu(canvas, actions, lang="zh", page=0, pages=2, pending=None, progres
         draw_circle(canvas, cx, 44, 24, accent, 2, (46, 54, 70))
         draw_circle(canvas, cx, 44, 29, (32, 38, 50), 2)
         label = menu_label(action, lang)
-        if pending == action and action in ("next", "back", "exit"):
-            label = "退出" if lang == "zh" else "EXIT"
         if not label:
             continue
         if lang == "zh" and all(ch in CJK_FONT for ch in label):
@@ -2406,16 +2413,25 @@ def set_clash_mode(mode):
 
 
 def best_clash_node():
+    """Pick once in a real Selector group.
+
+    URLTest/Fallback groups are continuously re-tested by Clash, so writing a
+    manual choice there is immediately overwritten. Only Selector groups are
+    eligible, and the group with the most nodes is preferred.
+    """
     try:
         proxies = clash_api("GET", "/proxies").get("proxies", {})
-        group = None
+        groups = []
         for name, p in proxies.items():
-            if p.get("type") in ("Selector", "URLTest", "Fallback", "LoadBalance") and p.get("now"):
-                if name.upper() != "GLOBAL":
-                    group = name
-                    break
-        if not group:
+            if p.get("type") != "Selector" or not p.get("now"):
+                continue
+            if name.upper() == "GLOBAL":
+                continue
+            groups.append((len(p.get("all") or []), name))
+        if not groups:
             return ""
+        groups.sort(reverse=True)
+        group = groups[0][1]
         q = urllib.parse.quote(group, safe="")
         delays = clash_api("GET", "/group/%s/delay?url=http%%3A%%2F%%2Fwww.gstatic.com%%2Fgenerate_204&timeout=5000" % q, timeout=7.0)
         candidates = [(int(v), k) for k, v in delays.items() if isinstance(v, int) and v > 0]
@@ -2452,6 +2468,30 @@ def proxy_hit(px, py):
     return -1
 
 
+def draw_mixed_at(canvas, x, y, text, color):
+    for ch in text:
+        if ch in CJK_FONT:
+            canvas.draw_cjk(x, y, ch, color, 1)
+            x += 13
+        else:
+            canvas.draw_text(x, y, ch, color, 1)
+            x += 6
+
+
+def proxy_status_text(key, lang, node=""):
+    if key == "selecting":
+        return "正在优选节点" if lang == "zh" else "SELECTING NODE..."
+    if key == "switched":
+        return ("已切换 " + node) if lang == "zh" else ("SWITCHED " + node)
+    if key == "failed":
+        return "优选失败" if lang == "zh" else "SELECT FAILED"
+    if key == "restarting":
+        return "正在重启" if lang == "zh" else "RESTARTING..."
+    if key == "stopping":
+        return "正在关闭" if lang == "zh" else "STOPPING..."
+    return ""
+
+
 def draw_proxy(canvas, mode, lang="zh", status=""):
     canvas.background = None
     canvas.content_alpha = 1.0
@@ -2460,11 +2500,14 @@ def draw_proxy(canvas, mode, lang="zh", status=""):
     mode_text = next((z if lang == "zh" else e for k, z, e in PROXY_MODES if k == mode), "")
     if lang == "zh":
         canvas.draw_cjk(8, 2, "猫猫", WHITE, 1)
-        canvas.draw_cjk(44, 2, mode_text, GREY, 1)
+        if status:
+            draw_mixed_at(canvas, 44, 2, status[:16], (255, 220, 80))
+        else:
+            canvas.draw_cjk(44, 2, mode_text, GREY, 1)
         canvas.draw_cjk(PHYS_W - 8 - cjk_width("返回"), 2, "返回", (240, 190, 60), 1)
     else:
         canvas.draw_text(8, 5, "CLASH", WHITE, 1)
-        canvas.draw_text(48, 5, mode_text, GREY, 1)
+        canvas.draw_text(48, 5, status[:24] if status else mode_text, (255, 220, 80) if status else GREY, 1)
         canvas.draw_text(PHYS_W - 8 - text_width("BACK", 1), 5, "BACK", (240, 190, 60), 1)
     canvas.fill_rect(8, 14, PHYS_W - 16, 1, (62, 70, 88))
     for i, (key, zh, en) in enumerate(PROXY_ITEMS):
@@ -2964,13 +3007,22 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                                 proxy_mode = nxt
                                 proxy_status = ""
                             elif key == "best":
-                                proxy_status = "已优选" if best_clash_node() else "优选失败"
+                                proxy_status = proxy_status_text("selecting", menu_lang)
+                                ps = Canvas()
+                                draw_proxy(ps, proxy_mode, menu_lang, proxy_status)
+                                _write_fb(fb, ps.render_fb())
+                                best = best_clash_node()
+                                if best:
+                                    cc = country_code(best)
+                                    proxy_status = proxy_status_text("switched", menu_lang, clean_node_name(best, cc))
+                                else:
+                                    proxy_status = proxy_status_text("failed", menu_lang)
                             elif key == "restart":
+                                proxy_status = proxy_status_text("restarting", menu_lang)
                                 restart_openclash()
-                                proxy_status = "重启中"
                             else:
+                                proxy_status = proxy_status_text("stopping", menu_lang)
                                 stop_openclash()
-                                proxy_status = "关闭中"
                             proxy_hold = None
                             proxy_key = None
                             menu_last_touch = now
@@ -3123,18 +3175,25 @@ def run_dashboard(cfg, fb, should_stop, write_status, exit_requested):
                             menu_hold_start = _time.time()
                         else:
                             menu_hold_action = None
+                    last_action = next((a for a in reversed(actions) if a != "none"), None)
                     if menu_open and pending:
-                        if pending != menu_hold_action:
-                            menu_hold_action = pending
-                            menu_hold_start = _time.time()
-                        progress = min(1.0, max(0.0, (_time.time() - menu_hold_start) / MENU_HOLD))
-                        if progress >= 1.0:
-                            if pending not in ("next", "back", "exit"):
-                                run_menu_action(pending)
-                            menu_open = False
-                            menu_suppress_until = _time.time() + 5.0
-                            force_render = True
-                            gestures = []
+                        # Page navigation and exit are tap-only. The top-right
+                        # header is the exit entry; holding them must do nothing.
+                        if pending in ("next", "back", "exit") or pending == last_action:
+                            menu_hold_action = None
+                            progress = 0.0
+                        else:
+                            if pending != menu_hold_action:
+                                menu_hold_action = pending
+                                menu_hold_start = _time.time()
+                            progress = min(1.0, max(0.0, (_time.time() - menu_hold_start) / MENU_HOLD))
+                            if progress >= 1.0:
+                                if pending not in ("next", "back", "exit"):
+                                    run_menu_action(pending)
+                                menu_open = False
+                                menu_suppress_until = _time.time() + 5.0
+                                force_render = True
+                                gestures = []
                     if menu_open:
                         out = bytearray(menu_base)
                         if pending and progress > 0:

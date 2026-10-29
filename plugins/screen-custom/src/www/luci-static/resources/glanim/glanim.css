@@ -1811,6 +1811,41 @@ body[data-page="admin-services-glanim-main"] .cbi-map > h2 {
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
+.gl-page .gl-pages-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.gl-page .gl-pages-json {
+  width: 100%;
+  min-height: 260px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--gl-border-strong);
+  border-radius: 10px;
+  background: var(--gl-card-soft);
+  color: var(--gl-text);
+  font: 12px/1.55 var(--gl-mono);
+  resize: vertical;
+}
+.gl-page .gl-custom-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gl-muted);
+  font-size: 12px;
+}
+.gl-page .gl-custom-page select {
+  min-width: 110px;
+  padding: 6px 9px;
+  border: 1px solid var(--gl-border-strong);
+  border-radius: 9px;
+  background: var(--gl-card-soft);
+  color: var(--gl-text);
+  font-size: 12px;
+}
 .gl-page .gl-custom-template {
   display: inline-flex;
   align-items: center;

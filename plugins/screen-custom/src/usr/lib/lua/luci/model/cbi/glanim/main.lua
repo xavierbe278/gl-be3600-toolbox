@@ -6,8 +6,8 @@ local fs = require "nixio.fs"
 
 local FRAMES_DEFAULT = "/usr/share/glanim/frames"
 local FRAME_BYTES = 76 * 284 * 2
-local VERSION = "1.9.6"
-local ASSET_VERSION = "20261027-fps15"
+local VERSION = "1.9.11"
+local ASSET_VERSION = "20261028-fps4"
 
 local function h(value)
 	return util.pcdata(tostring(value or ""))
@@ -126,6 +126,25 @@ if custom_raw ~= "" then
 	if ok and type(parsed) == "table" then custom_layout = parsed end
 end
 if type(custom_layout) ~= "table" then custom_layout = DEFAULT_LAYOUT end
+
+local custom_pages = nil
+local custom_pages_raw = cfg_str("custom_pages", "")
+if custom_pages_raw ~= "" then
+	local ok, parsed = pcall(json.parse, custom_pages_raw)
+	if ok and type(parsed) == "table" and #parsed > 0 then
+		local valid = {}
+		for i = 1, #parsed do
+			local page = parsed[i]
+			if type(page) == "table" and type(page.elements) == "table" and #page.elements > 0 then
+				valid[#valid + 1] = page
+			end
+		end
+		if #valid > 0 then custom_pages = valid end
+	end
+end
+if type(custom_pages) ~= "table" or #custom_pages < 1 then
+	custom_pages = { custom_layout }
+end
 
 local custom_bg_dir = cfg_str("custom_bg_dir", "/usr/share/glanim/custom_bg")
 local custom_bg_frames = tonumber(cfg_str("custom_bg_frames", "0")) or 0
@@ -372,6 +391,39 @@ add('<div class="gl-mini-note">' .. icon("sliders") .. '<span>' .. h(translate("
 add('</section>')
 add('</div>')
 
+-- ---------------- playback settings ----------------
+add('<section class="gl-card gl-panel" id="glanim-panel-playback">')
+add('<div class="gl-card-head"><div><h2>' .. h(translate("Playback")) .. '</h2></div>'
+	.. '<span class="gl-badge ' .. pack_state_cls .. '" id="glanim-pack-badge">' .. h(pack_state) .. '</span></div>')
+add('<div class="gl-two-col">')
+add(switch_row("gl-loop", translate("Loop animation"), translate("Off: stop after the last frame."), cur_loop))
+add('<div class="gl-range"><div class="gl-range-head"><label for="gl-fps">' .. h(translate("Force FPS")) .. '</label>'
+	.. '<span class="gl-fps-num"><input type="number" id="gl-fps-number" min="0" max="50" step="1" value="' .. cur_fps .. '"><em>fps</em></span></div>'
+	.. '<input type="range" id="gl-fps" min="0" max="50" step="1" value="' .. cur_fps .. '">'
+	.. '<div class="gl-range-hint"><span>0 = ' .. h(translate("native")) .. '</span><span>50 fps</span></div></div>')
+add('</div>')
+add('<div class="gl-pack" id="glanim-frame-pack">')
+add('<div class="gl-pack-main"><div class="gl-pack-icon">' .. icon("gif") .. '</div><div><strong id="glanim-pack-source">' .. h(pack_source ~= "" and pack_source or translate("No frame pack")) .. '</strong>'
+	.. '<small id="glanim-pack-detail">' .. h((pack_count > 0 and (string.format(translate("%s frames"), tostring(pack_count))) or translate("Upload a frame pack to start."))) .. (pack_missing > 0 and (" · " .. h(string.format(translate("%s missing"), tostring(pack_missing)))) or "") .. '</small></div></div>')
+add('<div class="gl-pack-actions">'
+	.. '<button type="button" class="gl-btn" id="glanim-pack-upload">' .. icon("upload") .. h(translate("Upload pack")) .. '</button>'
+	.. '<a class="gl-btn" id="glanim-pack-download" href="#">' .. icon("download") .. h(translate("Download")) .. '</a>'
+	.. '<button type="button" class="gl-btn ghost is-danger" id="glanim-pack-clear">' .. h(translate("Remove")) .. '</button>'
+	.. '<input type="file" id="glanim-pack-file" accept=".tar.gz,.tgz,application/gzip" hidden>'
+	.. '</div>')
+add('</div>')
+add('<div class="gl-pack" id="glanim-pp-bg" hidden>')
+add('<div class="gl-pack-main"><div class="gl-pack-icon">' .. icon("image") .. '</div><div><strong>' .. h(translate("Custom background")) .. '</strong>'
+	.. '<small>' .. h(string.format(translate("%s frames"), tostring(custom_bg_frames))) .. ' · ' .. h(tostring(custom_bg_fps)) .. ' fps</small></div></div>')
+add('<div class="gl-pack-actions">'
+	.. '<a class="gl-btn" id="glanim-pp-bg-download" href="#">' .. icon("download") .. h(translate("Download")) .. '</a>'
+	.. '<button type="button" class="gl-btn ghost is-danger" id="glanim-pp-bg-clear">' .. h(translate("Remove")) .. '</button>'
+	.. '</div>')
+add('</div>')
+add('<div class="gl-play-history" id="glanim-bg-history" hidden><div class="gl-play-history-head"><strong>' .. h(translate("Playback mode 1 · recent uploads")) .. '</strong><span>' .. h(translate("Last 3 saved backgrounds / GIFs, download or restore.")) .. '</span></div><div class="gl-bg-history-slots" id="glanim-bg-history-slots"></div></div>')
+add('<div class="gl-hint-line">' .. h(translate("Frame packs are produced by glanim-convert.py and must contain manifest.json plus 76×284 RGB565 frames.")) .. '</div>')
+add('</section>')
+
 -- ---------------- mode cards ----------------
 add('<section class="gl-card gl-modes-card">')
 add('<div class="gl-card-head"><div><h2>' .. h(translate("Play mode")) .. '</h2><p>' .. h(translate("Choose what the panel should do when the plugin is enabled.")) .. '</p></div></div>')
@@ -407,6 +459,8 @@ add('<div class="gl-card-head"><div><h2>' .. h(translate("Custom panel designer"
 	.. h(translate("Place labels, live values and progress bars on the 284 × 76 canvas. Drag elements to move them; the JSON layout is saved with the plugin."))
 	.. '</p></div><span class="gl-badge" id="glanim-custom-badge">' .. h(translate("free layout")) .. '</span></div>')
 add('<div class="gl-custom-toolbar">')
+add('<label class="gl-custom-page"><span>' .. h(translate("Page")) .. '</span><select id="glanim-custom-page"></select></label>'
+	.. '<button type="button" class="gl-btn" id="glanim-custom-add-page">+ ' .. h(translate("Add page")) .. '</button>')
 add('<label class="gl-custom-template"><span>' .. h(translate("Template")) .. '</span><select id="glanim-custom-template">'
 	.. '<option value="custom">' .. h(translate("Custom layout")) .. '</option>'
 	.. '<option value="status">' .. h(translate("Status rows")) .. '</option>'
@@ -450,29 +504,19 @@ add('<div class="gl-custom-subhead">' .. h(translate("Element")) .. '<span id="g
 add('<div class="gl-custom-inspector" id="glanim-custom-inspector"></div>')
 add('</div></div></section>')
 
--- ---------------- playback settings ----------------
-add('<section class="gl-card gl-panel" id="glanim-panel-playback">')
-add('<div class="gl-card-head"><div><h2>' .. h(translate("Playback")) .. '</h2></div>'
-	.. '<span class="gl-badge ' .. pack_state_cls .. '" id="glanim-pack-badge">' .. h(pack_state) .. '</span></div>')
-add('<div class="gl-two-col">')
-add(switch_row("gl-loop", translate("Loop animation"), translate("Off: stop after the last frame."), cur_loop))
-add('<div class="gl-range"><div class="gl-range-head"><label for="gl-fps">' .. h(translate("Force FPS")) .. '</label>'
-	.. '<span class="gl-fps-num"><input type="number" id="gl-fps-number" min="0" max="50" step="1" value="' .. cur_fps .. '"><em>fps</em></span></div>'
-	.. '<input type="range" id="gl-fps" min="0" max="50" step="1" value="' .. cur_fps .. '">'
-	.. '<div class="gl-range-hint"><span>0 = ' .. h(translate("native")) .. '</span><span>50 fps</span></div></div>')
-add('</div>')
-add('<div class="gl-pack">')
-add('<div class="gl-pack-main"><div class="gl-pack-icon">' .. icon("gif") .. '</div><div><strong id="glanim-pack-source">' .. h(pack_source ~= "" and pack_source or translate("No frame pack")) .. '</strong>'
-	.. '<small id="glanim-pack-detail">' .. h((pack_count > 0 and (string.format(translate("%s frames"), tostring(pack_count))) or translate("Upload a frame pack to start."))) .. (pack_missing > 0 and (" · " .. h(string.format(translate("%s missing"), tostring(pack_missing)))) or "") .. '</small></div></div>')
-add('<div class="gl-pack-actions">'
-	.. '<button type="button" class="gl-btn" id="glanim-pack-upload">' .. icon("upload") .. h(translate("Upload pack")) .. '</button>'
-	.. '<a class="gl-btn" id="glanim-pack-download" href="#">' .. icon("download") .. h(translate("Download")) .. '</a>'
-	.. '<button type="button" class="gl-btn ghost is-danger" id="glanim-pack-clear">' .. h(translate("Remove")) .. '</button>'
-	.. '<input type="file" id="glanim-pack-file" accept=".tar.gz,.tgz,application/gzip" hidden>'
-	.. '</div>')
-add('</div>')
-add('<div class="gl-play-history" id="glanim-bg-history" hidden><div class="gl-play-history-head"><strong>' .. h(translate("Playback mode 1 · recent uploads")) .. '</strong><span>' .. h(translate("Last 3 saved backgrounds / GIFs, download or restore.")) .. '</span></div><div class="gl-bg-history-slots" id="glanim-bg-history-slots"></div></div>')
-add('<div class="gl-hint-line">' .. h(translate("Frame packs are produced by glanim-convert.py and must contain manifest.json plus 76×284 RGB565 frames.")) .. '</div>')
+-- ---------------- custom pages (JSON / AI) ----------------
+add('<section class="gl-card gl-panel" id="glanim-panel-pages">')
+add('<div class="gl-card-head"><div><h2>' .. h(translate("Custom pages (JSON / AI)")) .. '</h2><p>'
+	.. h(translate("Paste a JSON array of page templates. Use the template below as a starting point; AI or external tools can generate the same schema."))
+	.. '</p></div><span class="gl-badge">' .. h(translate("code template")) .. '</span></div>')
+add('<div class="gl-pages-tools"><label class="gl-custom-template"><span>' .. h(translate("Template")) .. '</span><select id="glanim-pages-template">'
+	.. '<option value="status">' .. h(translate("Status rows")) .. '</option>'
+	.. '<option value="clock">' .. h(translate("Clock + network")) .. '</option>'
+	.. '<option value="fan">' .. h(translate("Fan + temperature")) .. '</option>'
+	.. '<option value="minimal">' .. h(translate("Minimal")) .. '</option></select></label>'
+	.. '<button type="button" class="gl-btn" id="glanim-pages-insert">' .. h(translate("Insert template")) .. '</button></div>')
+add('<textarea id="glanim-pages-json" class="gl-pages-json" spellcheck="false" rows="18"></textarea>')
+add('<div class="gl-hint-line">' .. h(translate("Saved pages rotate with the custom panel. Max 8 pages; every page is editable in the visual designer and stays in sync with this JSON.")) .. '</div>')
 add('</section>')
 
 -- ---------------- image studio ----------------
@@ -561,10 +605,6 @@ add('<div class="gl-menu-screen-body" id="gl-menu-screen-buttons"></div>')
 add('</div>')
 add('</div>')
 add('<div class="gl-menu-grid">')
-add('<div class="gl-field"><label for="gl-menu-lang">' .. h(translate("Menu language")) .. '</label><select id="gl-menu-lang">'
-	.. '<option value="auto"' .. (menu_lang ~= "zh" and menu_lang ~= "en" and " selected" or "") .. '>' .. h(translate("Follow LuCI language")) .. '</option>'
-	.. '<option value="zh"' .. (menu_lang == "zh" and " selected" or "") .. '>' .. h(translate("Chinese")) .. '</option>'
-	.. '<option value="en"' .. (menu_lang == "en" and " selected" or "") .. '>' .. h(translate("English")) .. '</option></select></div>')
 add('<div class="gl-field"><label for="gl-menu-pages">' .. h(translate("Menu pages")) .. '</label><select id="gl-menu-pages">'
 	.. '<option value="2"' .. (menu_pages == 2 and " selected" or "") .. '>2</option>'
 	.. '<option value="3"' .. (menu_pages == 3 and " selected" or "") .. '>3</option></select></div>')
@@ -634,6 +674,7 @@ local cfg_json = {
 	menuPage2 = menu_page2,
 	menuPage3 = menu_page3,
 	custom = custom_layout,
+	customPages = custom_pages,
 	customBg = {
 		dir = custom_bg_dir,
 		frames = custom_bg_frames,

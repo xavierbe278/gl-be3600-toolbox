@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RGB565 Frame Viewer</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0d12; --card:#151a23; --line:#2a3342; --text:#eef3ff; --dim:#8d9ab0; --accent:#6c8cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:radial-gradient(800px 400px at 50% 0%,#182238,#0b0d12 65%); color:var(--text); font:14px/1.5 system-ui,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 20px 40px; }
+  h1 { margin:0 0 6px; font-size:22px; letter-spacing:.02em; }
+  .sub { color:var(--dim); margin:0 0 18px; }
+  .drop { border:1px dashed #40506b; border-radius:14px; padding:26px; text-align:center; color:var(--dim); background:rgba(21,26,35,.7); cursor:pointer; transition:.15s; }
+  .drop.hover { border-color:var(--accent); background:#1c2638; color:var(--text); }
+  .drop strong { color:var(--text); }
+  input[type=file] { display:none; }
+  .panel { margin-top:14px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--card); }
+  .controls { display:flex; flex-wrap:wrap; gap:12px 18px; align-items:end; }
+  label { display:grid; gap:4px; color:var(--dim); font-size:11px; }
+  input[type=number], select { height:32px; min-width:76px; padding:0 8px; border:1px solid var(--line); border-radius:7px; background:#0e131c; color:var(--text); font:inherit; }
+  input[type=number] { width:82px; }
+  .check { display:flex; align-items:center; gap:6px; height:32px; color:var(--text); font-size:12px; }
+  .check input { accent-color:var(--accent); }
+  .stage { margin-top:14px; padding:16px; border:1px solid var(--line); border-radius:14px; background:#06080c; overflow:auto; text-align:center; }
+  canvas { image-rendering:pixelated; max-width:100%; height:auto; border-radius:4px; background:#000; }
+  .meta { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:10px; color:var(--dim); font-size:12px; }
+  .meta b { color:var(--text); font-weight:600; }
+  .frames { display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .frames input[type=range] { flex:1; accent-color:var(--accent); }
+  button { height:32px; min-width:64px; padding:0 12px; border:1px solid var(--line); border-radius:7px; background:#1a2230; color:var(--text); font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  .err { margin-top:12px; color:#ff8d8d; font-size:12px; white-space:pre-wrap; }
+  .hint { color:var(--dim); font-size:12px; margin-top:10px; }
+  code { color:#bcd0ff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>RGB565 Frame Viewer</h1>
+  <p class="sub">拖入 <code>.rgb565</code> / <code>.raw</code> 文件，本地解码预览，不上传任何数据。</p>
+
+  <div class="drop" id="drop">
+    <strong>拖入 RGB565 文件</strong>，或点击选择<br>
+    <span>支持多帧：会按文件名顺序组成帧列表</span>
+    <input id="file" type="file" multiple accept=".rgb565,.raw,.bin">
+  </div>
+
+  <div class="panel">
+    <div class="controls">
+      <label>宽（像素）<input id="width" type="number" min="1" max="4096" value="76"></label>
+      <label>高（像素）<input id="height" type="number" min="1" max="4096" value="284"></label>
+      <label>字节序
+        <select id="endian"><option value="le" selected>Little-endian</option><option value="be">Big-endian</option></select>
+      </label>
+      <label>颜色顺序
+        <select id="order"><option value="rgb" selected>RGB565</option><option value="bgr">BGR565</option></select>
+      </label>
+      <label>旋转
+        <select id="rotate"><option value="0">0°</option><option value="90" selected>90°</option><option value="180">180°</option><option value="270">270°</option></select>
+      </label>
+      <label>缩放
+        <select id="zoom"><option value="1">1×</option><option value="2" selected>2×</option><option value="3">3×</option><option value="4">4×</option></select>
+      </label>
+      <label class="check"><input id="flipX" type="checkbox"> 水平翻转</label>
+      <label class="check"><input id="flipY" type="checkbox"> 垂直翻转</label>
+    </div>
+    <div class="hint">GL-BE3600 默认：76×284、Little-endian、RGB565、旋转 90°。</div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="canvas" width="568" height="152"></canvas>
+    <div class="meta">
+      <span>文件：<b id="name">未选择</b></span>
+      <span>帧：<b id="frameInfo">0 / 0</b></span>
+      <span>大小：<b id="size">-</b></span>
+    </div>
+    <div class="frames">
+      <button id="prev" type="button">上一帧</button>
+      <input id="slider" type="range" min="0" max="0" value="0">
+      <button id="next" type="button">下一帧</button>
+      <button id="play" type="button">播放</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = { files: [], frames: [], index: 0, timer: null };
+  const rawCanvas = document.createElement('canvas');
+  const rawCtx = rawCanvas.getContext('2d', { willReadFrequently: true });
+
+  function readFile(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve({ name: file.name, buffer: r.result });
+      r.onerror = () => reject(r.error);
+      r.readAsArrayBuffer(file);
+    });
+  }
+
+  async function loadFiles(fileList) {
+    stop();
+    const files = Array.from(fileList).filter(f => /\.(rgb565|raw|bin)$/i.test(f.name));
+    if (!files.length) {
+      $('err').textContent = '请选择 .rgb565 / .raw / .bin 文件。';
+      return;
+    }
+    $('err').textContent = '';
+    state.files = files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    try {
+      state.frames = await Promise.all(state.files.map(readFile));
+      state.index = 0;
+      $('slider').max = String(Math.max(0, state.frames.length - 1));
+      render();
+    } catch (e) {
+      $('err').textContent = String(e);
+    }
+  }
+
+  function decode(frame) {
+    const w = Math.max(1, parseInt($('width').value, 10) || 76);
+    const h = Math.max(1, parseInt($('height').value, 10) || 284);
+    const n = w * h;
+    if (frame.buffer.byteLength < n * 2) {
+      throw new Error(`文件只有 ${frame.buffer.byteLength} 字节，需要 ${n * 2} 字节（${w}×${h}×2）。`);
+    }
+    const dv = new DataView(frame.buffer);
+    const le = $('endian').value === 'le';
+    const bgr = $('order').value === 'bgr';
+    const img = rawCtx.createImageData(w, h);
+    const data = img.data;
+    for (let i = 0; i < n; i++) {
+      const v = le ? dv.getUint16(i * 2, true) : dv.getUint16(i * 2, false);
+      let r = ((v >> 11) & 31) * 255 / 31;
+      let g = ((v >> 5) & 63) * 255 / 63;
+      let b = (v & 31) * 255 / 31;
+      if (bgr) { const t = r; r = b; b = t; }
+      const p = i * 4;
+      data[p] = r; data[p + 1] = g; data[p + 2] = b; data[p + 3] = 255;
+    }
+    rawCanvas.width = w;
+    rawCanvas.height = h;
+    rawCtx.putImageData(img, 0, 0);
+    return { w, h };
+  }
+
+  function render() {
+    try {
+      if (!state.frames.length) return;
+      const frame = state.frames[state.index];
+      const { w, h } = decode(frame);
+      const rot = parseInt($('rotate').value, 10) || 0;
+      const zoom = parseInt($('zoom').value, 10) || 1;
+      const outW = (rot === 90 || rot === 270) ? h : w;
+      const outH = (rot === 90 || rot === 270) ? w : h;
+      const c = $('canvas');
+      c.width = outW * zoom;
+      c.height = outH * zoom;
+      const ctx = c.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.imageSmoothingEnabled = false;
+      ctx.save();
+      ctx.scale(zoom, zoom);
+      if (rot === 90) { ctx.translate(h, 0); ctx.rotate(Math.PI / 2); }
+      else if (rot === 180) { ctx.translate(w, h); ctx.rotate(Math.PI); }
+      else if (rot === 270) { ctx.translate(0, w); ctx.rotate(-Math.PI / 2); }
+      if ($('flipX').checked) { ctx.translate(w, 0); ctx.scale(-1, 1); }
+      if ($('flipY').checked) { ctx.translate(0, h); ctx.scale(1, -1); }
+      ctx.drawImage(rawCanvas, 0, 0);
+      ctx.restore();
+      $('name').textContent = frame.name;
+      $('frameInfo').textContent = `${state.index + 1} / ${state.frames.length}`;
+      $('size').textContent = `${w}×${h} · ${frame.buffer.byteLength} B`;
+      $('slider').value = String(state.index);
+      $('err').textContent = '';
+    } catch (e) {
+      $('err').textContent = String(e.message || e);
+    }
+  }
+
+  function stop() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = null;
+    $('play').textContent = '播放';
+  }
+
+  function play() {
+    if (state.timer) { stop(); return; }
+    if (state.frames.length < 2) return;
+    $('play').textContent = '暂停';
+    state.timer = setInterval(() => {
+      state.index = (state.index + 1) % state.frames.length;
+      render();
+    }, 100);
+  }
+
+  $('drop').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', (e) => loadFiles(e.target.files));
+  ['dragenter', 'dragover'].forEach(ev => $('drop').addEventListener(ev, (e) => {
+    e.preventDefault(); $('drop').classList.add('hover');
+  }));
+  ['dragleave', 'drop'].forEach(ev => $('drop').addEventListener(ev, (e) => {
+    e.preventDefault(); $('drop').classList.remove('hover');
+  }));
+  $('drop').addEventListener('drop', (e) => { if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files); });
+  ['width', 'height', 'endian', 'order', 'rotate', 'zoom', 'flipX', 'flipY'].forEach(id => $(id).addEventListener('change', render));
+  $('slider').addEventListener('input', (e) => { state.index = parseInt(e.target.value, 10) || 0; render(); });
+  $('prev').addEventListener('click', () => { stop(); state.index = (state.index - 1 + state.frames.length) % state.frames.length; render(); });
+  $('next').addEventListener('click', () => { stop(); state.index = (state.index + 1) % state.frames.length; render(); });
+  $('play').addEventListener('click', play);
+})();
+</script>
+</body>
+</html>

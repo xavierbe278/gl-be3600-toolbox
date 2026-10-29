@@ -1,5 +1,5 @@
 Package: luci-app-glanim
-Version: 1.9.6-1
+Version: 1.9.11-1
 Depends: luci, luci-compat, rpcd, python3-light
 Architecture: aarch64_cortex-a53_neon-vfpv4
 Section: luci
