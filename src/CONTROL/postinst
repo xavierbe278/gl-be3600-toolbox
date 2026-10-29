@@ -1,0 +1,37 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+chmod 755 /etc/init.d/glanim /usr/bin/glanimd /usr/bin/glanimdash.py /usr/bin/glanim-switch
+chmod 644 /etc/config/glanim
+mkdir -p /usr/share/glanim/frames /usr/share/glanim/custom_bg
+chown -R root:root /usr/share/glanim/frames /usr/share/glanim/custom_bg \
+  /usr/lib/lua/luci/controller/glanim.lua \
+  /usr/lib/lua/luci/model/cbi/glanim \
+  /usr/lib/lua/luci/view/glanim \
+  /usr/share/rpcd/acl.d/luci-app-glanim.json 2>/dev/null
+rm -f /tmp/glanim.status
+if [ "$(uci get glanim.globals.enabled 2>/dev/null)" = "1" ]; then
+  /etc/init.d/glanim restart >/dev/null 2>&1
+fi
+
+# Physical switch: ON = glanim, OFF = OEM gl_screen.
+if [ -f /etc/rc.button/switch ] && [ -f /usr/lib/glanim/switch-hook.sh ] && ! grep -q "GLANIM_SWITCH_HOOK" /etc/rc.button/switch; then
+  sed -i '1r /usr/lib/glanim/switch-hook.sh' /etc/rc.button/switch
+fi
+
+# Optional gl-ui / OEM admin panel integration.
+BRIDGE="/www/luci-static/resources/glui-bridge/glui-bridge.js"
+if [ -f "$BRIDGE" ]; then
+  if [ -f /www/gl_home.html ] && ! grep -q "glui-bridge/glui-bridge.js" /www/gl_home.html; then
+    sed -i 's#</body>#<script src="/luci-static/resources/glui-bridge/glui-bridge.js"></script></body>#' /www/gl_home.html
+  fi
+  if [ -f /etc/glinjector/core.js ] && ! grep -q "GLUI_BRIDGE_LOADER" /etc/glinjector/core.js; then
+    cat >> /etc/glinjector/core.js <<'EOF'
+
+/* GLUI_BRIDGE_LOADER */
+;(function(){if(document.getElementById('glui-bridge-loader'))return;var s=document.createElement('script');s.id='glui-bridge-loader';s.src='/luci-static/resources/glui-bridge/glui-bridge.js';document.head.appendChild(s);})();
+EOF
+  fi
+fi
+
+echo "luci-app-glanim installed. Open LuCI -> Services -> Screen Custom."
+exit 0
