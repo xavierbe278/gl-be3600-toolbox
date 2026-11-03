@@ -1,0 +1,29 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] && exit 0
+
+chmod 755 /etc/init.d/fastnet 2>/dev/null
+chmod 755 /usr/sbin/FastNet /usr/sbin/FastNet-0.7.6 /usr/sbin/FastNet-0.7.7 2>/dev/null
+chmod 644 /etc/config/fastnet 2>/dev/null
+
+# 原版（单版本）包：把 uci 里的版本号校正为实际安装的核心版本
+if [ -f /usr/share/fastnet/version.txt ]; then
+	_v=$(cat /usr/share/fastnet/version.txt 2>/dev/null)
+	case "$_v" in
+		0.7.6|0.7.7)
+			uci -q set fastnet.fastnet.version="$_v" && uci -q commit fastnet
+			;;
+	esac
+fi
+
+# 清理 LuCI 缓存，让新页面/菜单立即生效
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+
+/etc/init.d/fastnet enable >/dev/null 2>&1
+/etc/init.d/fastnet restart >/dev/null 2>&1
+
+/etc/init.d/rpcd restart >/dev/null 2>&1
+sleep 1
+/etc/init.d/uhttpd reload >/dev/null 2>&1
+
+echo "luci-app-fastnet installed: Services -> FastNet (port $(uci -q get fastnet.fastnet.port || echo 3200))"
+exit 0

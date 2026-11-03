@@ -1,0 +1,154 @@
+<%
+local sys  = require "luci.sys"
+local fs   = require "nixio.fs"
+local uci  = require "luci.model.uci".cursor()
+local disp = require "luci.dispatcher"
+
+local cur_ver = uci:get("fastnet", "fastnet", "version") or "0.7.6"
+local port    = uci:get("fastnet", "fastnet", "port") or "3200"
+local token   = uci:get("fastnet", "fastnet", "token") or ""
+local logger  = uci:get("fastnet", "fastnet", "logger") or "0"
+local enabled = uci:get("fastnet", "fastnet", "enabled") or "1"
+
+local running = (enabled == "1") and
+	(sys.call("ubus -S call service list '{\"name\":\"fastnet\"}' 2>/dev/null | grep -q '\"running\": *true'") == 0)
+
+local host = luci.http.getenv("HTTP_HOST") or "192.168.1.1"
+host = host:gsub(":%d+$", "")
+
+local app_url    = "http://" .. host .. ":" .. port .. "/"
+local switch_url = disp.build_url("admin", "services", "fastnet", "switch")
+local save_url   = disp.build_url("admin", "services", "fastnet", "save")
+
+local function have(v)
+	return fs.access("/usr/bin/fastnet-" .. v) or fs.access("/usr/sbin/FastNet-" .. v)
+end
+
+local versions = { "0.7.6", "0.7.7" }
+%>
+
+<style>
+.fn-card {
+	border: 1px solid rgba(128,128,128,.30);
+	border-radius: 10px;
+	padding: 1.05em 1.25em;
+	background: rgba(127,127,127,.035);
+}
+.fn-card + .fn-card { margin-top: 1.2em; }
+.fn-card > h3 { margin: 0 0 .7em; }
+
+.fn-top { display: flex; align-items: stretch; flex-wrap: wrap; }
+.fn-col { flex: 1 1 46%; min-width: 290px; }
+.fn-col:first-child { padding-right: 1.3em; }
+.fn-col:last-child  { padding-left: 1.3em; }
+.fn-sep { width: 1px; background: rgba(128,128,128,.32); align-self: stretch; min-height: 200px; }
+
+.fn-row { display: flex; gap: .6em; align-items: center; margin: .55em 0; }
+.fn-row > label:first-child { min-width: 5.2em; opacity: .8; }
+.fn-row input[type=text], .fn-row input[type=password] {
+	flex: 1 1 auto; min-width: 0; padding: .3em .55em;
+	border: 1px solid rgba(128,128,128,.35); border-radius: 6px; background: transparent;
+}
+.fn-inline { min-width: auto !important; display: flex; align-items: center; gap: .45em; }
+.fn-badge { display: inline-block; padding: .1em .65em; border-radius: 10px; font-size: .9em; }
+.fn-ok  { background: rgba(46,125,50,.14);  color: #2e7d32; }
+.fn-off { background: rgba(198,40,40,.14);  color: #c62828; }
+.fn-btns { display: flex; flex-wrap: wrap; gap: .5em; margin: .9em 0 .3em; }
+.fn-sub { opacity: .7; font-size: .92em; margin-top: .5em; }
+
+@media (max-width: 760px) {
+	.fn-sep { display: none; }
+	.fn-col { flex: 1 1 100%; padding: 0 !important; }
+	.fn-col:last-child { margin-top: 1.1em; padding-top: 1.1em !important; border-top: 1px solid rgba(128,128,128,.25); }
+}
+</style>
+
+<div class="fn-card">
+	<div class="fn-top">
+
+		<!-- 左：运行状态 -->
+		<div class="fn-col">
+			<h3 style="margin-top:0"><%:运行状态%></h3>
+
+			<div class="fn-row"><label><%:版本%></label><b><%=cur_ver%></b></div>
+			<div class="fn-row"><label><%:端口%></label><b><%=port%></b></div>
+			<div class="fn-row">
+				<label><%:服务%></label>
+				<span class="fn-badge <%=running and 'fn-ok' or 'fn-off'%>">
+					<%= running and translate("运行中") or translate("已停止") %>
+				</span>
+			</div>
+
+			<div class="fn-btns">
+				<% for _, v in ipairs(versions) do %>
+					<% if have(v) then %>
+						<a class="cbi-button <%= (v == cur_ver) and 'cbi-button-apply' or 'cbi-button-reset' %>"
+						   href="<%=switch_url%>?ver=<%=v%>"><%=v%><%= (v == cur_ver) and ' ✓' or '' %></a>
+					<% else %>
+						<a class="cbi-button" style="opacity:.45;cursor:not-allowed"
+						   title="<%:该版本二进制缺失%>"><%=v%></a>
+					<% end %>
+				<% end %>
+			</div>
+
+			<div class="fn-btns">
+				<a class="cbi-button cbi-button-action" target="_blank" rel="noopener"
+				   href="<%=app_url%>" <%= running and '' or 'style="opacity:.45;pointer-events:none"' %>>
+					<%:打开 FastNet%> ↗
+				</a>
+			</div>
+
+			<div class="fn-sub"><%:切换版本会重启服务，端口不变。%></div>
+		</div>
+
+		<div class="fn-sep"></div>
+
+		<!-- 右：插件设置 -->
+		<div class="fn-col">
+			<h3 style="margin-top:0"><%:插件设置%></h3>
+
+			<form method="get" action="<%=save_url%>">
+				<div class="fn-row">
+					<label><%:插件开关%></label>
+					<label class="fn-inline">
+						<input type="checkbox" name="enabled" value="1" <%= (enabled == "1") and 'checked' or '' %> />
+						<span><%:启用 FastNet%></span>
+					</label>
+				</div>
+				<div class="fn-row">
+					<label><%:监听端口%></label>
+					<input type="text" name="port" value="<%=port%>" placeholder="3200" />
+				</div>
+				<div class="fn-row">
+					<label><%:API Token%></label>
+					<input type="password" name="token" value="<%=token%>" placeholder="<%:留空则不启用%>" />
+				</div>
+				<div class="fn-row">
+					<label><%:运行日志%></label>
+					<label class="fn-inline">
+						<input type="checkbox" name="logger" value="1" <%= (logger == "1") and 'checked' or '' %> />
+						<span><%:输出到系统日志%></span>
+					</label>
+				</div>
+				<div class="fn-btns">
+					<button type="submit" class="cbi-button cbi-button-apply"><%:保存并应用%></button>
+				</div>
+			</form>
+
+			<div class="fn-sub"><%:保存后会重启 FastNet 服务。%></div>
+		</div>
+
+	</div>
+</div>
+
+<div class="fn-card">
+	<h3><%:FastNet 页面%></h3>
+	<% if running then %>
+		<iframe src="<%=app_url%>"
+		        style="width:100%;min-height:76vh;border:0;border-radius:6px;background:#fff;display:block"></iframe>
+	<% else %>
+		<div class="alert-message warning">
+			<%:FastNet 当前未运行，内嵌页面暂不可用。请检查上方「插件设置」中的开关与端口。%>
+		</div>
+	<% end %>
+</div>

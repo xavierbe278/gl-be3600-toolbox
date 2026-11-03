@@ -1,0 +1,6 @@
+config fastnet 'fastnet'
+	option enabled '1'
+	option version '@VERSION@'
+	option port '3200'
+	option token ''
+	option logger '0'
