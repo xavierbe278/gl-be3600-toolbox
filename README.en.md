@@ -31,7 +31,9 @@ The script shows a menu first:
 ```text
 1) Install / update Screen Custom
 2) Install / update Fan Control
-3) Install / update both
+3) Install / update FastNet (choose version)
+4) Install / update all
+5) Check for updates only
 0) Exit
 ```
 
@@ -41,7 +43,7 @@ Nothing is downloaded until a choice is made.
 
 ```sh
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk \
+  /tmp/luci-app-glanim_1.9.11-1_aarch64_cortex-a53_neon-vfpv4.ipk \
   /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
@@ -52,8 +54,10 @@ rm -f /tmp/luci-indexcache*
 
 - LuCI: **Services → Screen Custom**
 - LuCI: **Services → Fan Control**
+- LuCI: **Services → FastNet**
 - Screen service: `/etc/init.d/glanim`
 - Fan service: `/etc/init.d/glfanctl`
+- FastNet service: `/etc/init.d/fastnet`
 - Screen status: `/tmp/glanim.status`
 - Menu settings: **Advanced & maintenance → Long-press menu**
 
@@ -63,10 +67,11 @@ rm -f /tmp/luci-indexcache*
 
 | Plugin | Version | Package | 中文 | English |
 |---|---|---|---|---|
-| Screen Custom | `1.9.6-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
+| Screen Custom | `1.9.11-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.11-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
 | Fan Control | `1.0.7-1` | [IPK](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
+| FastNet | `0.7.7-2` | [IPK](plugins/fastnet/releases/luci-app-fastnet_0.7.7-2_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fastnet/README.md) | — |
 
-- Source: [`plugins/screen-custom/`](plugins/screen-custom/) · [`plugins/fan-control/`](plugins/fan-control/)
+- Source: [`plugins/screen-custom/`](plugins/screen-custom/) · [`plugins/fan-control/`](plugins/fan-control/) · [`plugins/fastnet/`](plugins/fastnet/)
 - Full package: [zip](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.zip) · [tar.gz](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.tar.gz)
 
 ---
@@ -117,7 +122,8 @@ Tested **only on GL.iNet GL-BE3600**.
 - root / SSH is required;
 - framebuffer, touch paths and GPIO can differ on other firmware;
 - the physical Toggle switch still selects OEM / third-party screen;
-- screen and fan plugins are independent.
+- screen and fan plugins are independent;
+- the FastNet plugin is independent of both and ships 0.7.6 / 0.7.7 cores with an optional embedded page and version switch.
 
 ---
 
@@ -130,7 +136,8 @@ Tested **only on GL.iNet GL-BE3600**.
 ├── packages/
 ├── plugins/
 │   ├── screen-custom/
-│   └── fan-control/
+│   ├── fan-control/
+│   └── fastnet/
 └── build/
 ```
 
@@ -143,6 +150,14 @@ python build/build_ipk.py
 python build/build_ipk.py screen-custom
 python build/build_ipk.py fan-control
 python build/verify_final_ipk.py
+```
+
+FastNet ships its own build script and can be built as plain or optimized:
+
+```sh
+cd plugins/fastnet/src
+python build.py --version 0.7.7
+python build.py --version 0.7.7 --optimize
 ```
 
 ---
@@ -165,6 +180,14 @@ Backend → Screen Custom → Touch control: swap X/Y, flip X.
 ### Wrong architecture
 
 GL-BE3600 requires `aarch64_cortex-a53_neon-vfpv4`.
+
+### FastNet shows stopped
+
+After switching versions or reinstalling, the port may still be in TIME_WAIT; the service comes back within about a minute. You can also restart it manually:
+
+```sh
+/etc/init.d/fastnet restart
+```
 
 ---
 

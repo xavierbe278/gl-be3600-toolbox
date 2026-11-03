@@ -1,2 +1,6 @@
-7eab614c36b519360019d7f4fc8713c042be069ab6950e9a37c889f906030688  plugins/screen-custom/releases/luci-app-glanim_1.9.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
+3bdcb12f270f4d6577332dc1fc289e4c08d87b420d30009601e8a25c997a8497  plugins/fan-control/releases/luci-app-glfanctl_1.0.4-1_aarch64_cortex-a53_neon-vfpv4.ipk
 471fd93bb4adc6c4bff42198c4d5ba0191936eb67c1cda13cdef9cfde137f6b5  plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
+554fecaac7cf6a883de7fb911f943b0720f6bf2962fc1ca38d84d03e24322689  plugins/fastnet/releases/luci-app-fastnet_0.7.6-1_aarch64_cortex-a53_neon-vfpv4.ipk
+bf7a842d5f4c9f5f7b6e3bba352ea3c12505ea278abd00545adc978c002f05cc  plugins/fastnet/releases/luci-app-fastnet_0.7.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
+06380cdf76c809615d2a9401596cf1a4c26dc1104d7e878ff9cf520820092871  plugins/fastnet/releases/luci-app-fastnet_0.7.7-2_aarch64_cortex-a53_neon-vfpv4.ipk
+7eab614c36b519360019d7f4fc8713c042be069ab6950e9a37c889f906030688  plugins/screen-custom/releases/luci-app-glanim_1.9.11-1_aarch64_cortex-a53_neon-vfpv4.ipk

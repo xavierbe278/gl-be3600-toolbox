@@ -31,7 +31,9 @@ sh /tmp/glanim-install.sh
 ```text
 1) 安装 / 更新 屏幕自定义
 2) 安装 / 更新 风扇控制
-3) 安装 / 更新 两个插件
+3) 安装 / 更新 FastNet（选择版本）
+4) 安装 / 更新 全部插件
+5) 只检查更新
 0) 退出
 ```
 
@@ -41,7 +43,7 @@ sh /tmp/glanim-install.sh
 
 ```sh
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk \
+  /tmp/luci-app-glanim_1.9.11-1_aarch64_cortex-a53_neon-vfpv4.ipk \
   /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
@@ -52,8 +54,10 @@ rm -f /tmp/luci-indexcache*
 
 - LuCI：**服务 → 屏幕自定义**
 - LuCI：**服务 → 风扇控制**
+- LuCI：**服务 → FastNet**
 - 屏幕服务：`/etc/init.d/glanim`
 - 风扇服务：`/etc/init.d/glfanctl`
+- FastNet 服务：`/etc/init.d/fastnet`
 - 屏幕状态：`/tmp/glanim.status`
 - 长按菜单配置：**高级与维护 → 长按菜单**
 
@@ -65,9 +69,11 @@ rm -f /tmp/luci-indexcache*
 |---|---|---|---|---|
 | 屏幕自定义 / Screen Custom | `1.9.11-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.11-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
 | 风扇控制 / Fan Control | `1.0.7-1` | [IPK](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
+| FastNet / 网络体检 | `0.7.7-2` | [IPK](plugins/fastnet/releases/luci-app-fastnet_0.7.7-2_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fastnet/README.md) | — |
 
 - 屏幕插件源码与 PC 工具：[`plugins/screen-custom/`](plugins/screen-custom/)
 - 风扇插件源码：[`plugins/fan-control/`](plugins/fan-control/)
+- FastNet 插件源码：[`plugins/fastnet/`](plugins/fastnet/)
 - 完整包：[zip](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.zip) · [tar.gz](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.tar.gz)
 
 ---
@@ -139,7 +145,8 @@ rm -f /tmp/luci-indexcache*
 - 需要 root / SSH 权限；
 - 不同固件版本的 fb、触摸节点和 GPIO 可能不同；
 - 物理 Toggle 开关仍可用于切换原厂 / 第三方屏幕；
-- 屏幕插件与风扇插件相互独立，可只装其中一个。
+- 屏幕插件与风扇插件相互独立，可只装其中一个；
+- FastNet 插件独立于前两者，内置 0.7.6 / 0.7.7 两个核心，可选内嵌页面与版本切换。
 
 ---
 
@@ -156,11 +163,15 @@ rm -f /tmp/luci-indexcache*
 │   │   ├── releases/
 │   │   ├── images/
 │   │   └── README*.md
-│   └── fan-control/
+│   ├── fan-control/
+│   │   ├── src/
+│   │   ├── releases/
+│   │   ├── images/
+│   │   └── README*.md
+│   └── fastnet/
 │       ├── src/
 │       ├── releases/
-│       ├── images/
-│       └── README*.md
+│       └── README.md
 └── build/
 ```
 
@@ -175,10 +186,19 @@ python build/build_ipk.py fan-control
 python build/verify_final_ipk.py
 ```
 
+FastNet 使用插件自带的构建脚本，可按需生成原版或优化版：
+
+```sh
+cd plugins/fastnet/src
+python build.py --version 0.7.7
+python build.py --version 0.7.7 --optimize
+```
+
 产物位于：
 
 - `plugins/screen-custom/releases/`
 - `plugins/fan-control/releases/`
+- `plugins/fastnet/releases/`
 
 ---
 
@@ -200,6 +220,14 @@ cat /tmp/glanim.status
 ### 安装报架构不匹配
 
 GL-BE3600 必须使用 `aarch64_cortex-a53_neon-vfpv4`。
+
+### FastNet 显示「已停止」
+
+切换版本或重装后端口可能仍在 TIME_WAIT，服务会在约 1 分钟内自动拉起；也可以手动重启：
+
+```sh
+/etc/init.d/fastnet restart
+```
 
 ---
 

@@ -14,26 +14,47 @@ TMP="/tmp/glanim-install"
 
 GLANIM="luci-app-glanim"
 FAN="luci-app-glfanctl"
+FASTNET="luci-app-fastnet"
 NEED_G=0
 NEED_F=0
+NEED_N=0
+FASTNET_VARIANT=""
 MODE="install"
 
-say() { echo "[glanim] $*"; }
-die() { echo "[glanim] $*" >&2; exit 1; }
+say() { echo "[toolbox] $*"; }
+die() { echo "[toolbox] $*" >&2; exit 1; }
+
+# 交互输入：优先 /dev/tty，取不到时回退 stdin（便于管道调用）
+ask() {
+    IFS= read -r REPLY 2>/dev/null </dev/tty && return 0
+    IFS= read -r REPLY
+}
 
 show_menu() {
     cat <<'EOF'
 
 ========================================
       GL-BE3600 Toolbox 安装器
-       Made By @XavierBe278
 ========================================
   1) 安装 / 更新 屏幕自定义
   2) 安装 / 更新 风扇控制
-  3) 安装 / 更新 两个插件
-  4) 只检查更新
+  3) 安装 / 更新 FastNet（选择版本）
+  4) 安装 / 更新 全部插件
+  5) 只检查更新
   0) 退出
 ========================================
+EOF
+}
+
+show_fastnet_menu() {
+    cat <<'EOF'
+
+--------- FastNet 版本 ---------
+  1) 0.7.6 原版（单核心，无内嵌）
+  2) 0.7.7 原版（单核心，无内嵌）
+  3) 优化版（双核心 + 内嵌 + 版本切换）
+  0) 返回
+--------------------------------
 EOF
 }
 
@@ -43,7 +64,7 @@ case "${1:-}" in
   --help|-h)
     echo "用法: $0 [--check|--force]"
     echo "  默认显示交互菜单"
-    echo "  --check  只检查两个插件更新"
+    echo "  --check  只检查插件更新"
     echo "  --force  交互选择后强制重装"
     exit 0
     ;;
@@ -52,22 +73,39 @@ esac
 if [ "$MODE" = "check" ]; then
     NEED_G=1
     NEED_F=1
+    NEED_N=1
+    FASTNET_VARIANT="plus"
 else
     while :; do
         show_menu
-        printf "请选择 [0-4]: "
-        if [ -r /dev/tty ]; then
-            IFS= read -r choice </dev/tty || exit 0
-        else
-            IFS= read -r choice || exit 0
-        fi
+        printf "请选择 [0-5]: "
+        ask || exit 0
+        choice="$REPLY"
         case "$choice" in
             0|q|Q) say "已退出。"; exit 0 ;;
             1) NEED_G=1; break ;;
             2) NEED_F=1; break ;;
-            3) NEED_G=1; NEED_F=1; break ;;
-            4) NEED_G=1; NEED_F=1; MODE="check"; break ;;
-            *) echo "无效选择，请输入 0、1、2、3 或 4。" ;;
+            3)
+                while :; do
+                    show_fastnet_menu
+                    printf "请选择版本 [0-3]: "
+                    ask || exit 0
+                    v="$REPLY"
+                    case "$v" in
+                        1) FASTNET_VARIANT="076"; break ;;
+                        2) FASTNET_VARIANT="077"; break ;;
+                        3) FASTNET_VARIANT="plus"; break ;;
+                        0|q|Q) break ;;
+                        *) echo "无效选择。" ;;
+                    esac
+                done
+                [ -n "$FASTNET_VARIANT" ] || continue
+                NEED_N=1
+                break
+                ;;
+            4) NEED_G=1; NEED_F=1; NEED_N=1; FASTNET_VARIANT="plus"; break ;;
+            5) NEED_G=1; NEED_F=1; NEED_N=1; FASTNET_VARIANT="plus"; MODE="check"; break ;;
+            *) echo "无效选择，请输入 0-5。" ;;
         esac
     done
 fi
@@ -88,9 +126,9 @@ fetch() {
 
 download() {
     if command -v curl >/dev/null 2>&1; then
-        curl -fL --max-time 180 -o "$2" "$1"
+        curl -fL --max-time 300 -o "$2" "$1"
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$2" --timeout=180 "$1"
+        wget -q -O "$2" --timeout=300 "$1"
     else
         return 1
     fi
@@ -171,6 +209,65 @@ handle_plugin() {
     return 0
 }
 
+# ---- FastNet：三个变体共用包名，按选择取对应文件 ----
+fastnet_ipk_name() {
+    case "$FASTNET_VARIANT" in
+        076)  echo "${FASTNET}_0.7.6-1_${ARCH}.ipk" ;;
+        077)  echo "${FASTNET}_0.7.7-1_${ARCH}.ipk" ;;
+        plus) echo "${FASTNET}_0.7.7-2_${ARCH}.ipk" ;;
+        *)    echo "" ;;
+    esac
+}
+
+fastnet_label() {
+    case "$FASTNET_VARIANT" in
+        076)  echo "0.7.6 原版" ;;
+        077)  echo "0.7.7 原版" ;;
+        plus) echo "优化版（双核心 + 内嵌 + 切换）" ;;
+        *)    echo "未选择" ;;
+    esac
+}
+
+handle_fastnet() {
+    name=$(fastnet_ipk_name)
+    [ -n "$name" ] || { say "FastNet: 未选择版本"; return 1; }
+
+    ver=$(printf '%s\n' "$name" | sed -n "s/^${FASTNET}_\([^_]*\)_.*/\1/p")
+    current=$(installed_version "$FASTNET")
+    say "FastNet: $(fastnet_label)，目标 $ver"
+    say "FastNet: 已安装 ${current:-无}"
+
+    if [ "$MODE" = "check" ]; then
+        if [ "$current" = "$ver" ]; then
+            say "FastNet: 已安装该版本"
+        elif [ -n "$current" ] && version_gt "$current" "$ver"; then
+            say "FastNet: 已安装更高版本 $current（切换需重装）"
+        else
+            say "FastNet: 可安装 $ver"
+        fi
+        return 0
+    fi
+
+    if [ "$MODE" != "force" ] && [ "$current" = "$ver" ]; then
+        say "FastNet: 已是 $ver，跳过"
+        return 0
+    fi
+
+    url="${RAW_BASE}/plugins/fastnet/releases/${name}"
+    ipk="$TMP/$name"
+    say "FastNet: 下载 $name"
+    download "$url" "$ipk" || { say "FastNet: 下载失败"; return 1; }
+
+    size=$(wc -c < "$ipk" 2>/dev/null | tr -d ' ')
+    [ "${size:-0}" -gt 1024 ] || { say "FastNet: 下载文件无效"; rm -f "$ipk"; return 1; }
+
+    say "FastNet: 安装 $ver（$(fastnet_label)）"
+    opkg install --force-depends --force-reinstall --force-overwrite --force-downgrade "$ipk" \
+        || { say "FastNet: 安装失败"; return 1; }
+    say "FastNet: 安装完成"
+    return 0
+}
+
 rm -rf "$TMP"
 mkdir -p "$TMP" || die "无法创建 $TMP"
 
@@ -181,12 +278,16 @@ fi
 if [ "$NEED_F" = "1" ]; then
     handle_plugin "fan-control" "$FAN" || fail=1
 fi
+if [ "$NEED_N" = "1" ]; then
+    handle_fastnet || fail=1
+fi
 
 if [ "$MODE" != "check" ]; then
     rm -f /tmp/luci-indexcache* 2>/dev/null
     /etc/init.d/uhttpd restart >/dev/null 2>&1
     [ "$NEED_G" = "1" ] && [ -x /etc/init.d/glanim ] && /etc/init.d/glanim restart >/dev/null 2>&1
     [ "$NEED_F" = "1" ] && [ -x /etc/init.d/glfanctl ] && /etc/init.d/glfanctl restart >/dev/null 2>&1
+    [ "$NEED_N" = "1" ] && [ -x /etc/init.d/fastnet ] && /etc/init.d/fastnet restart >/dev/null 2>&1
     say "LuCI 缓存已清理"
 fi
 
