@@ -201,7 +201,9 @@ function index()
 	page.acl_depends = { "luci-app-glanim" }
 
 	entry({"admin", "services", "glanim", "main"},
-		cbi("glanim/main"), _("Screen Custom"), 10).leaf = true
+		cbi("glanim/main"), _("Screen Custom"), 10).leaf = true	entry({"admin", "services", "glanim", "nodes"},
+		cbi("glanim/nodes"), _("节点策略"), 20).leaf = true
+
 	entry({"admin", "services", "glanim", "status"}, call("action_status")).leaf = true
 	entry({"admin", "services", "glanim", "apply"}, call("action_apply")).leaf = true
 	entry({"admin", "services", "glanim", "save"}, call("action_save")).leaf = true

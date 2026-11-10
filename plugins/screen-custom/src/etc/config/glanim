@@ -52,3 +52,8 @@ config globals 'globals'
 	option menu_page1 'poweroff,reboot,wifi,next'
 	option menu_page2 'clash,brightness,fan,back'
 	option menu_page3 'wifi,brightness,clash,exit'
+	# ---- OpenClash node policy ----
+	# 1 = Clash may auto-switch nodes; 0 = groups are manual (select only)
+	option oc_auto_switch '0'
+	# comma separated; nodes whose name contains any keyword are removed from all groups
+	option oc_exclude_keywords '防失联,官网,剩余流量,套餐到期,距离下次重置,收藏'

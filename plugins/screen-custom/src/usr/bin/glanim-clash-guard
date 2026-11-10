@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""glanim-clash-guard —— 按插件设置整理 OpenClash 的节点分组
+
+读取 /etc/config/glanim：
+
+  oc_auto_switch      1/0   是否允许 Clash 自动切换节点
+  oc_exclude_keywords 逗号分隔的关键字，命中这些关键字的节点从所有分组移除
+
+    glanim-clash-guard apply    应用（插件保存设置、开机、OpenClash 重启后调用）
+    glanim-clash-guard status   查看
+    glanim-clash-guard restore  恢复原始配置
+
+原始配置保存在 <config>.glanim-guard-orig，apply 总是基于它重算，避免重复改写出错。
+"""
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+SUFFIX = ".glanim-guard-orig"
+AUTO_TYPES = ("url-test", "fallback")
+DEFAULT_KW = "防失联,官网,剩余流量,套餐到期,距离下次重置,收藏"
+
+
+def sh(cmd):
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True).stdout.strip()
+
+
+def uci_get(key, default=""):
+    v = sh("uci -q get %s" % key)
+    return v if v else default
+
+
+def config_path():
+    p = uci_get("openclash.config.config_path")
+    if p and os.path.exists(p):
+        return p
+    out = sh("ps w | grep '[c]lash -d' | sed -n 's/.*-f \\([^ ]*\\).*/\\1/p' | head -1")
+    return out if out and os.path.exists(out) else ""
+
+
+def keywords():
+    raw = uci_get("glanim.globals.oc_exclude_keywords", DEFAULT_KW)
+    return [k.strip() for k in re.split(r"[,，\s]+", raw) if k.strip()]
+
+
+def auto_switch_on():
+    return uci_get("glanim.globals.oc_auto_switch", "1") != "0"
+
+
+def secret():
+    return uci_get("openclash.config.dashboard_password")
+
+
+def api(method, path, payload=None, timeout=6):
+    req = urllib.request.Request(
+        "http://127.0.0.1:9090" + path,
+        data=json.dumps(payload).encode() if payload is not None else None,
+        method=method,
+        headers={"Authorization": "Bearer " + secret(), "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        body = r.read().decode("utf-8", "replace")
+        return json.loads(body) if body.strip().startswith("{") else body
+
+
+def group_names():
+    try:
+        proxies = api("GET", "/proxies").get("proxies", {})
+    except Exception:
+        return []
+    return [n for n, p in proxies.items()
+            if p.get("type") in ("Selector", "URLTest", "Fallback", "LoadBalance")
+            and n.upper() != "GLOBAL"]
+
+
+def strip_items(line, kws):
+    """从 flow 风格分组的 proxies: [..] 里删掉命中关键字的条目。"""
+    m = re.search(r"(proxies:\s*\[)(.*?)(\])", line)
+    if not m:
+        return line, 0
+    parts = [p.strip() for p in m.group(2).split(",") if p.strip()]
+    kept, removed = [], 0
+    for p in parts:
+        name = p.strip().strip("'\"")
+        if any(k in name for k in kws):
+            removed += 1
+            continue
+        kept.append(p)
+    if removed == 0:
+        return line, 0
+    return line[:m.start(2)] + ", ".join(kept) + line[m.end(2):], removed
+
+
+def to_manual(line):
+    """flow 风格把 url-test / fallback 改成 select，并去掉 url/interval/tolerance。"""
+    if not re.search(r"type:\s*(url-test|fallback)\b", line):
+        return line, ""
+    m = re.match(r"^(\s*- \{.*?name: ([^,]+?),.*?)type:\s*(?:url-test|fallback)(.*)$", line)
+    if not m:
+        return line, ""
+    name = m.group(2).strip().strip("'\"")
+    tail = re.sub(r",\s*(url|interval|tolerance):\s*('[^']*'|\"[^\"]*\"|\S+)", "", m.group(3))
+    return m.group(1) + "type: select" + tail, name
+
+
+def transform(text, kws, manual):
+    lines = text.split("\n")
+    out, stats = [], {"removed": 0, "groups": []}
+    in_groups = False
+    for line in lines:
+        if re.match(r"^proxy-groups:\s*$", line):
+            in_groups = True
+            out.append(line)
+            continue
+        if in_groups and re.match(r"^[a-z-]+:\s*$", line) and not line.startswith(" "):
+            in_groups = False
+        if in_groups and "proxies:" in line and line.lstrip().startswith("- {"):
+            new, n = strip_items(line, kws)
+            stats["removed"] += n
+            if manual:
+                new, g = to_manual(new)
+                if g:
+                    stats["groups"].append(g)
+            out.append(new)
+            continue
+        out.append(line)
+    return "\n".join(out), stats
+
+
+def apply():
+    cfg = config_path()
+    if not cfg:
+        print("ERROR: 找不到 OpenClash 配置")
+        return 1
+    orig = cfg + SUFFIX
+    if not os.path.exists(orig):
+        shutil.copy2(cfg, orig)
+
+    kws = keywords()
+    manual = not auto_switch_on()
+    text = open(orig, "r", encoding="utf-8").read()
+    new, stats = transform(text, kws, manual)
+    if new != text:
+        open(cfg, "w", encoding="utf-8", newline="\n").write(new)
+        sh("/etc/init.d/openclash restart")
+        time.sleep(10)
+
+    # 分组当前选中若被移除，切到第一个可用节点
+    for g in group_names():
+        try:
+            d = api("GET", "/proxies/" + urllib.parse.quote(g, safe=""))
+            now = d.get("now") or ""
+            allnodes = d.get("all") or []
+            if now and allnodes and any(k in now for k in kws):
+                target = next((n for n in allnodes if not any(k in n for k in kws)), "")
+                if target:
+                    api("PUT", "/proxies/" + urllib.parse.quote(g, safe=""), {"name": target})
+        except Exception:
+            pass
+
+    print("已应用：移除 %d 个匹配节点；自动切换 %s%s"
+          % (stats["removed"], "关闭" if manual else "开启",
+             ("；转手动分组: " + ", ".join(stats["groups"])) if stats["groups"] else ""))
+    return 0
+
+
+def restore():
+    cfg = config_path()
+    if not cfg or not os.path.exists(cfg + SUFFIX):
+        print("没有可恢复的原始配置")
+        return 0
+    shutil.copy2(cfg + SUFFIX, cfg)
+    os.remove(cfg + SUFFIX)
+    sh("/etc/init.d/openclash restart")
+    print("已恢复原始配置")
+    return 0
+
+
+def status():
+    cfg = config_path()
+    print("配置    : %s" % (cfg or "未找到"))
+    print("自动切换: %s" % ("开启" if auto_switch_on() else "关闭"))
+    print("关键字  : %s" % ", ".join(keywords()))
+    print("原始备份: %s" % ("有" if cfg and os.path.exists(cfg + SUFFIX) else "无"))
+    return 0
+
+
+if __name__ == "__main__":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    if cmd == "apply":
+        sys.exit(apply())
+    if cmd == "restore":
+        sys.exit(restore())
+    sys.exit(status())

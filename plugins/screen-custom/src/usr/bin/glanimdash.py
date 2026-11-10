@@ -2412,6 +2412,18 @@ def set_clash_mode(mode):
         return False
 
 
+def clash_exclude_keywords():
+    """关键字来自插件设置，节点名命中任一关键字的都不参与优选。"""
+    default = "防失联,官网,剩余流量,套餐到期,距离下次重置,收藏"
+    try:
+        out = subprocess.run(["uci", "-q", "get", "glanim.globals.oc_exclude_keywords"],
+                             capture_output=True, text=True, timeout=3).stdout.strip()
+    except Exception:
+        out = ""
+    raw = out or default
+    return [k for k in re.split(r"[,，\s]+", raw) if k]
+
+
 def best_clash_node():
     """Pick once in a real Selector group.
 
@@ -2434,7 +2446,10 @@ def best_clash_node():
         group = groups[0][1]
         q = urllib.parse.quote(group, safe="")
         delays = clash_api("GET", "/group/%s/delay?url=http%%3A%%2F%%2Fwww.gstatic.com%%2Fgenerate_204&timeout=5000" % q, timeout=7.0)
-        candidates = [(int(v), k) for k, v in delays.items() if isinstance(v, int) and v > 0]
+        _kws = clash_exclude_keywords()
+        candidates = [(int(v), k) for k, v in delays.items()
+                      if isinstance(v, int) and v > 0
+                      and not any(_kw in k for _kw in _kws)]
         if not candidates:
             return ""
         best = min(candidates)[1]

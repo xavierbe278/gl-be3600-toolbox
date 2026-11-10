@@ -1,6 +1,6 @@
 #!/bin/sh
 [ -n "$IPKG_INSTROOT" ] && exit 0
-chmod 755 /etc/init.d/glanim /usr/bin/glanimd /usr/bin/glanimdash.py /usr/bin/glanim-switch
+chmod 755 /etc/init.d/glanim /usr/bin/glanimd /usr/bin/glanimdash.py /usr/bin/glanim-switch /usr/bin/glanim-clash-guard
 chmod 644 /etc/config/glanim
 mkdir -p /usr/share/glanim/frames /usr/share/glanim/custom_bg
 chown -R root:root /usr/share/glanim/frames /usr/share/glanim/custom_bg \
@@ -31,6 +31,11 @@ if [ -f "$BRIDGE" ]; then
 ;(function(){if(document.getElementById('glui-bridge-loader'))return;var s=document.createElement('script');s.id='glui-bridge-loader';s.src='/luci-static/resources/glui-bridge/glui-bridge.js';document.head.appendChild(s);})();
 EOF
   fi
+fi
+
+# 按当前设置整理 OpenClash 分组（没有 OpenClash 时脚本会自动跳过）
+if [ -f /usr/bin/glanim-clash-guard ] && [ -x /etc/init.d/openclash ]; then
+  /usr/bin/glanim-clash-guard apply >/tmp/glanim-guard.log 2>&1 &
 fi
 
 echo "luci-app-glanim installed. Open LuCI -> Services -> Screen Custom."
