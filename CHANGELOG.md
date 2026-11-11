@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.9.19 — 2026-11-11
+
+### luci-app-glanim 1.9.19-1
+
+#### 节点策略
+
+- 新增「OpenClash 集成修复」入口，仅在 OpenClash 升级/重装或集成失效后手动点击；
+- 修复后自动补回 OpenClash custom hook，关闭流媒体自动选路并重新整理节点分组；
+- 普通订阅更新由 custom hook 自动处理，不运行后台轮询；
+- 集成说明改为面向用户的文案，不再显示实现细节。
+
+#### 节点 Guard
+
+- 自动排除「防失联 / 官网 / 剩余流量 / 套餐到期 / 距离下次重置 / 收藏」等节点；
+- 关闭自动切换时，`url-test` / `fallback` 分组转为手动 Selector；
+- 手动应用时不会把「自动选择 / 故障转移」再次选成当前节点；
+- 保留原始 OpenClash 配置备份，可恢复。
+
+#### 版本
+
+- 插件版本：`1.9.19-1`
+- 架构：`aarch64_cortex-a53_neon-vfpv4`
+- 仓库源码：`plugins/screen-custom/src/`
+
 ## v1.9.12 — 2026-11-10
 
 ### luci-app-glanim 1.9.12-1

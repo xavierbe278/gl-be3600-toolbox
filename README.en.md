@@ -43,7 +43,7 @@ Nothing is downloaded until a choice is made.
 
 ```sh
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.12-1_aarch64_cortex-a53_neon-vfpv4.ipk \
+  /tmp/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk \
   /tmp/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
@@ -67,12 +67,12 @@ rm -f /tmp/luci-indexcache*
 
 | Plugin | Version | Package | 中文 | English |
 |---|---|---|---|---|
-| Screen Custom | `1.9.12-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.12-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
+| Screen Custom | `1.9.19-1` | [IPK](plugins/screen-custom/releases/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/screen-custom/README.zh-CN.md) | [README](plugins/screen-custom/README.en.md) |
 | Fan Control | `1.0.7-1` | [IPK](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fan-control/README.zh-CN.md) | [README](plugins/fan-control/README.en.md) |
 | FastNet | `0.7.7-2` | [IPK](plugins/fastnet/releases/luci-app-fastnet_0.7.7-2_aarch64_cortex-a53_neon-vfpv4.ipk) | [README](plugins/fastnet/README.md) | — |
 
 - Source: [`plugins/screen-custom/`](plugins/screen-custom/) · [`plugins/fan-control/`](plugins/fan-control/) · [`plugins/fastnet/`](plugins/fastnet/)
-- Full package: [zip](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.zip) · [tar.gz](https://github.com/xavierbe278/gl-be3600-toolbox/archive/refs/tags/1.9.5.tar.gz)
+- Plugin downloads: [Screen Custom](plugins/screen-custom/releases/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk) · [Fan Control](plugins/fan-control/releases/luci-app-glfanctl_1.0.7-1_aarch64_cortex-a53_neon-vfpv4.ipk)
 
 ---
 
