@@ -33,6 +33,12 @@ EOF
   fi
 fi
 
+# OpenClash 每次启动/更新订阅后重跑 Guard，避免防失联节点和自动选路回来
+HOOK="/etc/openclash/custom/openclash_custom_overwrite.sh"
+if [ -f "$HOOK" ] && ! grep -q 'glanim-clash-guard apply-config' "$HOOK"; then
+  sed -i '/^exit 0/i [ -x /usr/bin/glanim-clash-guard ] && /usr/bin/glanim-clash-guard apply-config "$CONFIG_FILE" >>"$LOG_FILE" 2>&1' "$HOOK"
+fi
+
 # 按当前设置整理 OpenClash 分组（没有 OpenClash 时脚本会自动跳过）
 if [ -f /usr/bin/glanim-clash-guard ] && [ -x /etc/init.d/openclash ]; then
   /usr/bin/glanim-clash-guard apply >/tmp/glanim-guard.log 2>&1 &

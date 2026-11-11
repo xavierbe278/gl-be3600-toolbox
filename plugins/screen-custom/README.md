@@ -20,6 +20,7 @@
 - OpenClash 状态页：ON/OFF、代理模式、实时上下行、累计流量、连接数、CPU/内存；
 - OpenClash 三页：状态 / 详情 / 节点（国家旗帜、中文国家名、节点类型、延迟、倍率、UDP、连接数）；
 - 屏幕右上角 ON/OFF 触摸按钮，可直接启动/停止 OpenClash；
+- **节点策略**页：自动切换开关、排除关键字、OpenClash 集成修复；OpenClash 升级后手动修复，订阅更新自动整理；
 - 多页自动轮换，间隔可设 2–30 秒；点击预览 Tab 会锁定页面并关闭自动轮换。
 - 字体包：经典 5×7 / 粗体 5×7 / 紧凑 4×7；
 - 物理拨动开关：ON = glanim，OFF = 原厂 `gl_screen`（挂接 `/etc/rc.button/switch`）；
@@ -77,11 +78,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -220,7 +221,7 @@ uci commit glanim
 python build/build_ipk.py screen-custom
 ```
 
-产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_....ipk`
+产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.19-1_....ipk`
 
 结构：
 

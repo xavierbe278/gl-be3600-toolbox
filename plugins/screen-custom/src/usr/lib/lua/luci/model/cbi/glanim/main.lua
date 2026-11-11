@@ -6,7 +6,7 @@ local fs = require "nixio.fs"
 
 local FRAMES_DEFAULT = "/usr/share/glanim/frames"
 local FRAME_BYTES = 76 * 284 * 2
-local VERSION = "1.9.11"
+local VERSION = "1.9.19"
 local ASSET_VERSION = "20261028-fps4"
 
 local function h(value)

@@ -17,6 +17,13 @@ kw.default = "防失联,官网,剩余流量,套餐到期,距离下次重置,收�
 kw.rmempty = true
 kw.description = translate("逗号分隔。节点名包含任一关键字的，从所有分组中移除，无法被选中。")
 
+local apply = s:option(Button, "_apply_guard", translate("OpenClash 集成修复"))
+apply.inputtitle = translate("立即修复集成")
+apply.description = translate("OpenClash 升级/重装后，如节点选择或解锁异常，点一次即可修复，并恢复手动选路。普通订阅更新无需操作。")
+apply.write = function()
+	sys.call("/usr/bin/glanim-clash-guard apply >/tmp/glanim-guard.log 2>&1 &")
+end
+
 function m.on_after_commit(self)
 	sys.call("/usr/bin/glanim-clash-guard apply >/tmp/glanim-guard.log 2>&1 &")
 end

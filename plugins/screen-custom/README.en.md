@@ -20,6 +20,7 @@ Author: **@xavierbe278** · GitHub: [gl-be3600-toolbox](https://github.com/xavie
 - OpenClash status mode: ON/OFF, mode, live RX/TX, total traffic, connections, CPU/MEM;
 - three OpenClash pages: status / details / node (country flag, Chinese country name, node type, latency, rate, UDP, connections);
 - on-screen ON/OFF touch button for the OpenClash service;
+- **Node policy** page: auto-switch toggle, exclusion keywords and OpenClash integration repair; repair manually after an OpenClash upgrade, subscription updates are handled automatically;
 - configurable 2–30 s page rotation; preview tabs lock the page and disable rotation.
 - physical switch: ON = glanim, OFF = OEM `gl_screen` (hook in `/etc/rc.button/switch`);
 - custom background preview now loads the real background frame, so it is visible and not stretched.
@@ -81,11 +82,11 @@ Other firmware versions or panel batches may need adjustments.
 ## Install
 
 ```sh
-scp releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -220,7 +221,7 @@ From the repository root:
 python build/build_ipk.py screen-custom
 ```
 
-Output: `plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_....ipk`
+Output: `plugins/screen-custom/releases/luci-app-glanim_1.9.19-1_....ipk`
 
 Layout:
 

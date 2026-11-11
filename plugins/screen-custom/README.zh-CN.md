@@ -11,7 +11,7 @@
 ![LuCI](https://img.shields.io/badge/LuCI-23.05-orange)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-`luci-app-glanim` **1.9.6-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
+`luci-app-glanim` **1.9.19-1**：为 GL-BE3600 的 284×76 ST7789 长条屏提供 帧包 / GIF / 图片、系统面板、OpenClash 状态/详情/节点、可视化自定义面板，并可选挂接 GL.iNet 原厂管理面板。
 
 ---
 
@@ -20,6 +20,8 @@
 - OpenClash 状态页：ON/OFF、代理模式、实时上下行、累计流量、连接数、CPU/内存；
 - OpenClash 三页：状态 / 详情 / 节点（国家旗帜、中文国家名、节点类型、延迟、倍率、UDP、连接数）；
 - 屏幕右上角 ON/OFF 触摸按钮，可直接启动/停止 OpenClash；
+- 新增**节点策略**页：自动切换开关、排除关键字、OpenClash 集成修复；
+- OpenClash 升级/重装后手动点一次「立即修复集成」；普通订阅更新自动整理；
 - 多页自动轮换，间隔可设 2–30 秒；点击预览 Tab 会锁定页面并关闭自动轮换。
 - 物理拨动开关：ON = glanim，OFF = 原厂 `gl_screen`（挂接 `/etc/rc.button/switch`）；
 - 自定义背景预览改为加载真实背景帧，不再空白或被拉伸。
@@ -83,11 +85,11 @@
 ## 安装
 
 ```sh
-scp releases/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
+scp releases/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk root@192.168.8.1:/tmp/
 
 ssh root@192.168.8.1
 opkg install --force-depends --force-reinstall --force-overwrite \
-  /tmp/luci-app-glanim_1.9.6-1_aarch64_cortex-a53_neon-vfpv4.ipk
+  /tmp/luci-app-glanim_1.9.19-1_aarch64_cortex-a53_neon-vfpv4.ipk
 
 rm -f /tmp/luci-indexcache*
 /etc/init.d/uhttpd restart
@@ -226,7 +228,7 @@ uci commit glanim
 python build/build_ipk.py screen-custom
 ```
 
-产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.6-1_....ipk`
+产物：`plugins/screen-custom/releases/luci-app-glanim_1.9.19-1_....ipk`
 
 结构：
 

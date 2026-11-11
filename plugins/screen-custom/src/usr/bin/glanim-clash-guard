@@ -139,6 +139,11 @@ def apply():
     if not cfg:
         print("ERROR: 找不到 OpenClash 配置")
         return 1
+    ensure_hook()
+    # Manual groups must not be overridden by OpenClash's streaming-unlock
+    # auto selection; otherwise a media region (e.g. SG) can pick any SG node.
+    if not auto_switch_on():
+        sh("uci set openclash.config.stream_auto_select=0; uci commit openclash")
     orig = cfg + SUFFIX
     if not os.path.exists(orig):
         shutil.copy2(cfg, orig)
@@ -158,8 +163,9 @@ def apply():
             d = api("GET", "/proxies/" + urllib.parse.quote(g, safe=""))
             now = d.get("now") or ""
             allnodes = d.get("all") or []
-            if now and allnodes and any(k in now for k in kws):
-                target = next((n for n in allnodes if not any(k in n for k in kws)), "")
+            if now and allnodes and (now in group_names() or any(k in now for k in kws)):
+                target = next((n for n in allnodes
+                               if n not in group_names() and not any(k in n for k in kws)), "")
                 if target:
                     api("PUT", "/proxies/" + urllib.parse.quote(g, safe=""), {"name": target})
         except Exception:
@@ -168,6 +174,51 @@ def apply():
     print("已应用：移除 %d 个匹配节点；自动切换 %s%s"
           % (stats["removed"], "关闭" if manual else "开启",
              ("；转手动分组: " + ", ".join(stats["groups"])) if stats["groups"] else ""))
+    return 0
+
+
+HOOK_PATH = "/etc/openclash/custom/openclash_custom_overwrite.sh"
+HOOK_LINE = '[ -x /usr/bin/glanim-clash-guard ] && /usr/bin/glanim-clash-guard apply-config "$CONFIG_FILE" >>"$LOG_FILE" 2>&1'
+
+
+def ensure_hook():
+    """Repair OpenClash's custom overwrite hook after an OpenClash update."""
+    if not os.path.isfile(HOOK_PATH):
+        return False
+    try:
+        text = open(HOOK_PATH, "r", encoding="utf-8").read()
+    except Exception:
+        return False
+    if HOOK_LINE in text:
+        return False
+    if "\nexit 0" in text:
+        text = text.replace("\nexit 0", "\n" + HOOK_LINE + "\nexit 0", 1)
+    else:
+        text = text.rstrip() + "\n" + HOOK_LINE + "\n"
+    try:
+        open(HOOK_PATH, "w", encoding="utf-8", newline="\n").write(text)
+    except Exception:
+        return False
+    return True
+
+
+def apply_config(path):
+    """Rewrite one generated config without restarting the core.
+
+    Called from OpenClash's custom overwrite hook, including after a
+    subscription update. Idempotent, so repeated starts are safe.
+    """
+    if not path or not os.path.exists(path):
+        print("ERROR: 配置不存在")
+        return 1
+    if not auto_switch_on():
+        sh("uci set openclash.config.stream_auto_select=0; uci commit openclash")
+    text = open(path, "r", encoding="utf-8").read()
+    new, stats = transform(text, keywords(), not auto_switch_on())
+    if new != text:
+        open(path, "w", encoding="utf-8", newline="\n").write(new)
+    print("配置已整理：移除 %d 个匹配节点；自动切换 %s"
+          % (stats["removed"], "关闭" if not auto_switch_on() else "开启"))
     return 0
 
 
@@ -196,6 +247,9 @@ if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
     if cmd == "apply":
         sys.exit(apply())
+    if cmd == "apply-config" and len(sys.argv) > 2:
+        sys.exit(apply_config(sys.argv[2]))
+
     if cmd == "restore":
         sys.exit(restore())
     sys.exit(status())
